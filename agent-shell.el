@@ -852,6 +852,9 @@ Includes shells accessed via viewport buffers, preserving visited order."
 
 (defun agent-shell-other-buffer ()
   "Switch to other associated buffer (viewport vs shell)."
+  (declare (modes agent-shell-mode
+                  agent-shell-viewport-view-mode
+                  agent-shell-viewport-edit-mode))
   (interactive)
   (cond ((or (derived-mode-p 'agent-shell-viewport-view-mode)
              (derived-mode-p 'agent-shell-viewport-edit-mode))
@@ -877,6 +880,7 @@ Includes shells accessed via viewport buffers, preserving visited order."
 
 (defun agent-shell-copy-session-id ()
   "Copy the current session ID to the kill ring."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in a shell"))
@@ -889,6 +893,7 @@ Includes shells accessed via viewport buffers, preserving visited order."
 (defun agent-shell-interrupt (&optional force)
   "Interrupt in-progress request and reject all pending permissions.
 When FORCE is non-nil, skip confirmation prompt."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -2615,12 +2620,14 @@ APPEND and CREATE-NEW control update behavior."
 
 (defun agent-shell-toggle-logging ()
   "Toggle logging."
+  (declare (modes agent-shell-mode))
   (interactive)
   (setq acp-logging-enabled (not acp-logging-enabled))
   (message "Logging: %s" (if acp-logging-enabled "ON" "OFF")))
 
 (defun agent-shell-reset-logs ()
   "Reset all log buffers."
+  (declare (modes agent-shell-mode))
   (interactive)
   (acp-reset-logs :client (map-elt (agent-shell--state) :client))
   (message "Logs reset"))
@@ -2631,6 +2638,7 @@ APPEND and CREATE-NEW control update behavior."
 Could be a prompt or an expandable item.
 If point is at the input prompt and a character key was pressed,
 insert the character instead."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -2667,6 +2675,7 @@ insert the character instead."
 Could be a prompt or an expandable item.
 If point is at the input prompt and a character key was pressed,
 insert the character instead."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -3099,6 +3108,7 @@ Return file path of the generated SVG."
 
 (defun agent-shell-view-traffic ()
   "View agent shell traffic buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -3110,6 +3120,7 @@ Return file path of the generated SVG."
 
 (defun agent-shell-view-acp-logs ()
   "View agent shell ACP logs buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -4309,6 +4320,9 @@ Returns a buffer object or nil."
 
 The command executes asynchronously.  When finished, the output is
 inserted into the shell buffer prompt."
+  (declare (modes agent-shell-mode
+                  agent-shell-viewport-view-mode
+                  agent-shell-viewport-edit-mode))
   (interactive)
   (unless (or (derived-mode-p 'agent-shell-viewport-view-mode)
               (derived-mode-p 'agent-shell-viewport-edit-mode)
@@ -4944,6 +4958,7 @@ Returns nil if the ACP-OPTION kind is not recognized."
   "Jump to the latest permission button row.
 
 Returns non-nil if a permission button was found, nil otherwise."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let ((found (save-mark-and-excursion
                       (goto-char (point-max))
@@ -4958,6 +4973,7 @@ Returns non-nil if a permission button was found, nil otherwise."
 
 (defun agent-shell-next-permission-button ()
   "Jump to the next button."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let* ((found (save-mark-and-excursion
                        (when (get-text-property (point) 'agent-shell-permission-button)
@@ -4972,6 +4988,7 @@ Returns non-nil if a permission button was found, nil otherwise."
 
 (defun agent-shell-previous-permission-button ()
   "Jump to the previous button."
+  (declare (modes agent-shell-mode))
   (interactive)
   (when-let* ((found (save-mark-and-excursion
                        (when (get-text-property (point) 'agent-shell-permission-button)
@@ -5541,6 +5558,7 @@ Uses :eval so the mode updates automatically when state changes."
   "Cycle through available session modes for the current `agent-shell' session.
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5581,6 +5599,7 @@ Optionally, get notified of completion with ON-SUCCESS function."
   "Set session mode (if any available).
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5632,6 +5651,7 @@ Optionally, get notified of completion with ON-SUCCESS function."
   "Set session model.
 
 Optionally, get notified of completion with ON-SUCCESS function."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (user-error "Not in an agent-shell buffer"))
@@ -5949,6 +5969,7 @@ Includes STATUS, TITLE, KIND, DESCRIPTION, COMMAND, PARAMETERS, and OUTPUT."
 
 (defun agent-shell-open-transcript ()
   "Open the transcript file for the current `agent-shell' buffer."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in an agent-shell buffer"))
@@ -6028,6 +6049,7 @@ automatically sent when the current request completes."
 
 (defun agent-shell-resume-pending-requests ()
   "Resume processing pending requests in the queue."
+  (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
@@ -6042,6 +6064,7 @@ automatically sent when the current request completes."
 
 When called interactively with pending requests, prompt to either remove all
 or select a specific request to remove."
+  (declare (modes agent-shell-mode))
   (interactive
    (let ((pending (map-elt agent-shell--state :pending-requests)))
      (unless (derived-mode-p 'agent-shell-mode)
