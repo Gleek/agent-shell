@@ -1138,178 +1138,113 @@ code block content
       (should (= (length received-events) 1))
       (should (equal (map-elt (nth 0 received-events) :event) 'prompt-ready)))))
 
-(ert-deftest agent-shell-subscribe-with-delay-fires-after-delay-test ()
-  "Test that the callback fires after the delay expires."
+(ert-deftest agent-shell-idle-event-fires-after-timeout-test ()
+  "Test that idle event fires after timeout following a trigger event."
   (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout 0.01)
+          (fired nil))
       (cl-letf (((symbol-function 'agent-shell--state)
                  (lambda () agent-shell--state)))
-        (agent-shell-subscribe-with-delay
+        (agent-shell-subscribe-to
          :shell-buffer (current-buffer)
-         :event 'test-event
-         :delay 0.01
+         :event 'idle
          :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'test-event)
+        (agent-shell--start-idle-timer :event 'permission-request)
         (sit-for 0.05)
         (should fired)))))
 
-(ert-deftest agent-shell-subscribe-with-delay-does-not-fire-immediately-test ()
-  "Test that the callback does not fire synchronously."
+(ert-deftest agent-shell-idle-event-does-not-fire-immediately-test ()
+  "Test that idle event does not fire synchronously."
   (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout 999)
+          (fired nil))
       (cl-letf (((symbol-function 'agent-shell--state)
                  (lambda () agent-shell--state)))
-        (agent-shell-subscribe-with-delay
+        (agent-shell-subscribe-to
          :shell-buffer (current-buffer)
-         :event 'test-event
-         :delay 999
+         :event 'idle
          :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'test-event)
+        (agent-shell--start-idle-timer :event 'permission-request)
         (should-not fired)))))
 
-(ert-deftest agent-shell-subscribe-with-delay-cancel-on-test ()
-  "Test that cancel-on event prevents the callback from firing."
+(ert-deftest agent-shell-idle-event-cancelled-by-activity-test ()
+  "Test that activity cancels the idle timer."
   (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout 0.01)
+          (fired nil))
       (cl-letf (((symbol-function 'agent-shell--state)
                  (lambda () agent-shell--state)))
-        (agent-shell-subscribe-with-delay
+        (agent-shell-subscribe-to
          :shell-buffer (current-buffer)
-         :event 'test-event
-         :delay 0.01
-         :cancel-on '(cancel-event)
+         :event 'idle
          :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'test-event)
-        (agent-shell--emit-event :event 'cancel-event)
+        (agent-shell--start-idle-timer :event 'permission-request)
+        (agent-shell--cancel-idle-timer)
         (sit-for 0.05)
         (should-not fired)))))
 
-(ert-deftest agent-shell-subscribe-with-delay-rearm-test ()
-  "Test that re-firing the trigger event restarts the timer."
+(ert-deftest agent-shell-idle-event-rearms-on-new-trigger-test ()
+  "Test that re-firing a trigger event restarts the idle timer."
   (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (count 0))
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout 0.05)
+          (count 0))
       (cl-letf (((symbol-function 'agent-shell--state)
                  (lambda () agent-shell--state)))
-        (agent-shell-subscribe-with-delay
+        (agent-shell-subscribe-to
          :shell-buffer (current-buffer)
-         :event 'test-event
-         :delay 0.05
+         :event 'idle
          :on-event (lambda (_event) (setq count (1+ count))))
-        (agent-shell--emit-event :event 'test-event)
+        (agent-shell--start-idle-timer :event 'permission-request)
         (sit-for 0.02)
-        (agent-shell--emit-event :event 'test-event)
+        (agent-shell--start-idle-timer :event 'permission-request)
         (sit-for 0.08)
         (should (= count 1))))))
 
-(ert-deftest agent-shell-subscribe-with-delay-cancel-function-test ()
-  "Test that the returned cancel function stops a pending timer."
-  (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
-      (cl-letf (((symbol-function 'agent-shell--state)
-                 (lambda () agent-shell--state)))
-        (let ((cancel (agent-shell-subscribe-with-delay
-                       :shell-buffer (current-buffer)
-                       :event 'test-event
-                       :delay 0.01
-                       :on-event (lambda (_event) (setq fired t)))))
-          (agent-shell--emit-event :event 'test-event)
-          (funcall cancel)
-          (sit-for 0.05)
-          (should-not fired))))))
-
-(ert-deftest agent-shell-notify-fires-test ()
-  "Test that `agent-shell-notify' fires after delay."
-  (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
-      (cl-letf (((symbol-function 'agent-shell--state)
-                 (lambda () agent-shell--state)))
-        (agent-shell-notify
-         :shell-buffer (current-buffer)
-         :event 'permission-request
-         :delay 0.01
-         :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'permission-request)
-        (sit-for 0.05)
-        (should fired)))))
-
-(ert-deftest agent-shell-notify-cancels-on-response-test ()
-  "Test that permission-response cancels a pending permission-request notification."
-  (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
-      (cl-letf (((symbol-function 'agent-shell--state)
-                 (lambda () agent-shell--state)))
-        (agent-shell-notify
-         :shell-buffer (current-buffer)
-         :event 'permission-request
-         :delay 0.01
-         :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'permission-request)
-        (agent-shell--emit-event :event 'permission-response)
-        (sit-for 0.05)
-        (should-not fired)))))
-
-(ert-deftest agent-shell-notify-turn-complete-test ()
-  "Test that `agent-shell-notify' works with turn-complete."
-  (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
-      (cl-letf (((symbol-function 'agent-shell--state)
-                 (lambda () agent-shell--state)))
-        (agent-shell-notify
-         :shell-buffer (current-buffer)
-         :event 'turn-complete
-         :delay 0.01
-         :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'turn-complete)
-        (sit-for 0.05)
-        (should fired)))))
-
-(ert-deftest agent-shell-notify-input-submitted-cancels-test ()
-  "Test that input-submitted cancels a pending turn-complete notification."
-  (with-temp-buffer
-    (let* ((agent-shell--state (list (cons :buffer (current-buffer))
-                                     (cons :event-subscriptions nil)))
-           (fired nil))
-      (cl-letf (((symbol-function 'agent-shell--state)
-                 (lambda () agent-shell--state)))
-        (agent-shell-notify
-         :shell-buffer (current-buffer)
-         :event 'turn-complete
-         :delay 0.01
-         :on-event (lambda (_event) (setq fired t)))
-        (agent-shell--emit-event :event 'turn-complete)
-        (agent-shell--emit-event :event 'input-submitted)
-        (sit-for 0.05)
-        (should-not fired)))))
-
-(ert-deftest agent-shell-notify-rejects-unknown-event-test ()
-  "Test that `agent-shell-notify' errors on unsupported events."
+(ert-deftest agent-shell-idle-event-defaults-to-30-when-nil-test ()
+  "Test that idle timer falls back to 30 seconds when timeout is nil."
   (with-temp-buffer
     (let ((agent-shell--state (list (cons :buffer (current-buffer))
-                                    (cons :event-subscriptions nil))))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout nil))
       (cl-letf (((symbol-function 'agent-shell--state)
                  (lambda () agent-shell--state)))
-        (should-error (agent-shell-notify
-                       :shell-buffer (current-buffer)
-                       :event 'unknown-event
-                       :delay 1
-                       :on-event #'ignore)
-                      :type 'error)))))
+        (agent-shell--start-idle-timer :event 'permission-request)
+        (should (timerp (map-elt agent-shell--state :idle-timer)))))))
+
+(ert-deftest agent-shell-idle-event-includes-trigger-and-buffer-test ()
+  "Test that idle event data includes the trigger event and buffer."
+  (with-temp-buffer
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout 0.01)
+          (buf (current-buffer))
+          (received nil))
+      (cl-letf (((symbol-function 'agent-shell--state)
+                 (lambda () agent-shell--state)))
+        (agent-shell-subscribe-to
+         :shell-buffer (current-buffer)
+         :event 'idle
+         :on-event (lambda (event) (setq received event)))
+        (agent-shell--start-idle-timer :event 'turn-complete)
+        (sit-for 0.05)
+        (should (equal (map-nested-elt received '(:data :idle-event))
+                       'turn-complete))
+        (should (equal (map-nested-elt received '(:data :buffer))
+                       buf))))))
 
 (ert-deftest agent-shell-dwim-carries-context-to-first-viewport-open-test ()
   "Test `agent-shell--dwim' carries context into deferred viewport open."

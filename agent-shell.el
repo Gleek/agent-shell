@@ -568,6 +568,16 @@ Available values:
                  (const :tag "Prompt for session" prompt))
   :group 'agent-shell)
 
+(defvar agent-shell-idle-timeout 30
+  "Seconds before an `idle' event is emitted.
+
+When the agent is waiting for user input (after `permission-request'
+or `turn-complete'), an `idle' event is emitted after this many
+seconds of inactivity.  Activity events (`permission-response',
+`tool-call-update', `input-submitted', `clean-up') cancel the timer.
+
+When nil, defaults to 30 seconds.")
+
 (defcustom agent-shell-outgoing-request-decorator nil
   "Function to decorate outgoing ACP requests before they are sent.
 
@@ -708,6 +718,7 @@ OUTGOING-REQUEST-DECORATOR (passed through to `acp-make-client')."
         (cons :fork-session-id nil)
         (cons :prompt-capabilities nil)
         (cons :event-subscriptions nil)
+        (cons :idle-timer nil)
         (cons :active-requests nil)
         (cons :pending-requests nil)
         (cons :usage (list (cons :total-tokens 0)
@@ -1460,6 +1471,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
                       (when-let ((diff (agent-shell--make-diff-info
                                         :acp-tool-call (map-nested-elt acp-notification '(params update)))))
                         (list (cons :diff diff)))))
+             (agent-shell--cancel-idle-timer)
              (agent-shell--emit-event
               :event 'tool-call-update
               :data (list (cons :tool-call-id (map-nested-elt acp-notification '(params update toolCallId)))
@@ -1629,6 +1641,7 @@ COMMAND, when present, may be a shell command string or an argv vector."
                       (when-let ((diff (agent-shell--make-diff-info
                                         :acp-tool-call (map-nested-elt acp-notification '(params update)))))
                         (list (cons :diff diff)))))
+             (agent-shell--cancel-idle-timer)
              (agent-shell--emit-event
               :event 'tool-call-update
               :data (list (cons :tool-call-id (map-nested-elt acp-notification '(params update toolCallId)))
@@ -1815,12 +1828,14 @@ COMMAND, when present, may be a shell command string or an argv vector."
                                         :existing-only t)))
              (with-current-buffer viewport-buffer
                (agent-shell-jump-to-latest-permission-button-row))))
-         (let ((tool-call-id (map-nested-elt acp-request '(params toolCall toolCallId))))
+         (let* ((tool-call-id (map-nested-elt acp-request '(params toolCall toolCallId)))
+                (data (list (cons :request-id (map-elt acp-request 'id))
+                            (cons :tool-call-id tool-call-id)
+                            (cons :tool-call (map-nested-elt state (list :tool-calls tool-call-id))))))
            (agent-shell--emit-event
             :event 'permission-request
-            :data (list (cons :request-id (map-elt acp-request 'id))
-                        (cons :tool-call-id tool-call-id)
-                        (cons :tool-call (map-nested-elt state (list :tool-calls tool-call-id))))))
+            :data data)
+           (agent-shell--start-idle-timer :event 'permission-request :data data))
          (map-put! state :last-entry-type "session/request_permission"))
         ((equal (map-elt acp-request 'method) "fs/read_text_file")
          (agent-shell--on-fs-read-text-file-request
@@ -2319,6 +2334,7 @@ DIFF should be in the form returned by `agent-shell--make-diff-info':
 For example, shut down ACP client."
   (unless (derived-mode-p 'agent-shell-mode)
     (error "Not in a shell"))
+  (agent-shell--cancel-idle-timer)
   (agent-shell--emit-event :event 'clean-up)
   (agent-shell--shutdown)
   ;; Kill any open diff buffers associated with tool calls.
@@ -3643,6 +3659,8 @@ Session events:
   `turn-complete'       - Agent turn finished and prompt ready for input
     :data contains :stop-reason and :usage
   `input-submitted'     - User submitted input to the agent
+  `idle'                - Agent idle for `agent-shell-idle-timeout' seconds
+    :data contains :idle-event and :buffer
 
 General events:
   `error'               - ACP request failed
@@ -3671,7 +3689,17 @@ Example usage:
   (let ((token (agent-shell-subscribe-to
                 :shell-buffer shell-buffer
                 :on-event #\\='my-handler)))
-    (agent-shell-unsubscribe :subscription token))"
+    (agent-shell-unsubscribe :subscription token))
+
+  ;; Get notified when agent is idle (skip if buffer is visible)
+  (agent-shell-subscribe-to
+   :shell-buffer shell-buffer
+   :event \\='idle
+   :on-event
+     (lambda (event)
+       (unless (get-buffer-window (map-nested-elt event \\='(:data :buffer)))
+         (start-process \"notify\" nil \"notify-send\"
+                        \"Agent Shell\" \"Agent waiting for input\"))))"
   (unless on-event
     (error "Missing required argument: :on-event"))
   (unless shell-buffer
@@ -3693,12 +3721,11 @@ Example usage:
 SUBSCRIPTION is a token returned by `agent-shell-subscribe-to'."
   (unless subscription
     (error "Missing required argument: :subscription"))
-  (let ((subscriptions (map-elt (agent-shell--state) :event-subscriptions)))
-    (map-put! (agent-shell--state)
-              :event-subscriptions
-              (seq-remove (lambda (sub)
-                            (equal (map-elt sub :token) subscription))
-                          subscriptions))))
+  (map-put! (agent-shell--state)
+            :event-subscriptions
+            (seq-remove (lambda (sub)
+                          (equal (map-elt sub :token) subscription))
+                        (map-elt (agent-shell--state) :event-subscriptions))))
 
 (cl-defun agent-shell--emit-event (&key event data)
   "Emit an EVENT to matching subscribers.
@@ -3713,112 +3740,31 @@ DATA is an optional alist of event-specific data."
         (with-current-buffer (map-elt (agent-shell--state) :buffer)
           (funcall (map-elt sub :on-event) event-alist))))))
 
-(defun agent-shell--fire-delayed-event (shell-buffer on-event event-data)
-  "Fire ON-EVENT with EVENT-DATA in SHELL-BUFFER if it is still live."
-  (when (buffer-live-p shell-buffer)
-    (with-current-buffer shell-buffer
-      (funcall on-event event-data))))
+(cl-defun agent-shell--start-idle-timer (&key event data)
+  "Start the idle timer for EVENT with DATA.
+Cancels any existing idle timer first.  After
+`agent-shell-idle-timeout' seconds, emits an `idle' event with
+the original EVENT as :idle-event."
+  (agent-shell--cancel-idle-timer)
+  (when-let ((buffer (map-elt (agent-shell--state) :buffer)))
+    (map-put! (agent-shell--state) :idle-timer
+              (run-at-time (or agent-shell-idle-timeout 30) nil
+                           (lambda ()
+                             (when (buffer-live-p buffer)
+                               (with-current-buffer buffer
+                                 (map-put! (agent-shell--state) :idle-timer nil)
+                                 (agent-shell--emit-event
+                                  :event 'idle
+                                  :data (append (list (cons :idle-event event)
+                                                      (cons :buffer buffer))
+                                                data)))))))))
 
-(cl-defun agent-shell-subscribe-with-delay (&key shell-buffer event delay
-                                                 cancel-on on-event)
-  "Subscribe to EVENT with a delayed ON-EVENT callback.
-
-Like `agent-shell-subscribe-to', but ON-EVENT fires DELAY seconds
-after EVENT rather than immediately.  If EVENT fires again before
-the timer expires, the timer restarts.
-
-CANCEL-ON is a list of event symbols that cancel the pending timer
-without firing ON-EVENT.
-
-Return a function that cancels any pending timer and drops
-subscriptions.
-
-Example:
-
-  (agent-shell-subscribe-with-delay
-   :shell-buffer buffer
-   :event \\='permission-request
-   :delay 30
-   :cancel-on \\='(permission-response tool-call-update
-                input-submitted clean-up)
-   :on-event (lambda (event)
-               (let ((title (or (map-nested-elt event '(:data :tool-call :title))
-                                \"Permission needed\")))
-                 (start-process \"notify\" nil \"notify-send\"
-                                \"Agent Shell\" title))))"
-  (unless shell-buffer
-    (error "Missing required argument: :shell-buffer"))
-  (unless event
-    (error "Missing required argument: :event"))
-  (unless delay
-    (error "Missing required argument: :delay"))
-  (unless on-event
-    (error "Missing required argument: :on-event"))
-  (let (timer tokens)
-    (push (agent-shell-subscribe-to
-           :shell-buffer shell-buffer
-           :event event
-           :on-event (lambda (event-data)
-                       (when (timerp timer) (cancel-timer timer))
-                       (setq timer
-                             (run-at-time delay nil
-                                          #'agent-shell--fire-delayed-event
-                                          shell-buffer on-event event-data))))
-          tokens)
-    (dolist (e cancel-on)
-      (push (agent-shell-subscribe-to
-             :shell-buffer shell-buffer
-             :event e
-             :on-event (lambda (_event)
-                         (when (timerp timer) (cancel-timer timer))
-                         (setq timer nil)))
-            tokens))
-    (lambda ()
-      (when (timerp timer) (cancel-timer timer))
-      (setq timer nil)
-      (dolist (token tokens)
-        (agent-shell-unsubscribe :subscription token)))))
-
-(cl-defun agent-shell-notify (&key shell-buffer event delay
-                                                      on-event)
-  "Subscribe to EVENT in SHELL-BUFFER and fire ON-EVENT after DELAY seconds.
-
-Like `agent-shell-subscribe-with-delay', but automatically cancels
-the pending notification when activity resumes, based on EVENT:
-
-  `permission-request' cancels on `permission-response',
-    `tool-call-update', `input-submitted', and `clean-up'.
-
-  `turn-complete' cancels on `tool-call-update', `input-submitted',
-    and `clean-up'.
-
-Return a function that cancels any pending timer and drops
-subscriptions.
-
-Intended for use from `agent-shell-mode-hook'.  For example:
-
-  (add-hook
-   \\='agent-shell-mode-hook
-   (lambda ()
-     (agent-shell-notify
-      :shell-buffer (current-buffer)
-      :event \\='permission-request
-      :delay 30
-      :on-event (lambda (event)
-                  (let ((title (or (map-nested-elt event '(:data :tool-call :title))
-                                   \"Permission needed\")))
-                    (start-process \"notify\" nil \"notify-send\"
-                                   \"Agent Shell\" title))))))"
-  (agent-shell-subscribe-with-delay
-   :shell-buffer shell-buffer
-   :event event
-   :delay delay
-   :cancel-on (pcase event
-                ('permission-request '(permission-response tool-call-update
-                                       input-submitted clean-up))
-                ('turn-complete '(tool-call-update input-submitted clean-up))
-                (_ (error "Unsupported event for notification: %s" event)))
-   :on-event on-event))
+(defun agent-shell--cancel-idle-timer ()
+  "Cancel any pending idle timer."
+  (when-let ((timer (map-elt (agent-shell--state) :idle-timer))
+             ((timerp timer)))
+    (cancel-timer timer))
+  (map-put! (agent-shell--state) :idle-timer nil))
 
 ;;; Initialization
 
@@ -4816,6 +4762,7 @@ If FILE-PATH is not an image, returns nil."
       (agent-shell-heartbeat-start
        :heartbeat (map-elt agent-shell--state :heartbeat)))
 
+    (agent-shell--cancel-idle-timer)
     (agent-shell--emit-event :event 'input-submitted)
 
     (map-put! agent-shell--state :last-entry-type nil)
@@ -4879,10 +4826,12 @@ If FILE-PATH is not an image, returns nil."
                        (agent-shell--display-pending-requests))
                      (shell-maker-finish-output :config shell-maker--config
                                                 :success t)
-                     (agent-shell--emit-event
-                      :event 'turn-complete
-                      :data (list (cons :stop-reason (map-elt acp-response 'stopReason))
-                                  (cons :usage (map-elt (agent-shell--state) :usage))))
+                     (let ((data (list (cons :stop-reason (map-elt acp-response 'stopReason))
+                                       (cons :usage (map-elt (agent-shell--state) :usage)))))
+                       (agent-shell--emit-event
+                        :event 'turn-complete
+                        :data data)
+                       (agent-shell--start-idle-timer :event 'turn-complete :data data))
                      ;; Update viewport header (longer busy)
                      (when-let ((viewport-buffer (agent-shell-viewport--buffer
                                                   :shell-buffer shell-buffer
@@ -5482,6 +5431,7 @@ MESSAGE-TEXT: Optional message to display after sending the response."
     ;; Note: Tool call data is no longer deleted here intentionally.
     ;; Subsequent tool_call_update notifications still need the data.
     ;; It gets cleared at end of turn with all tool calls.
+    (agent-shell--cancel-idle-timer)
     (agent-shell--emit-event
      :event 'permission-response
      :data (list (cons :request-id request-id)
