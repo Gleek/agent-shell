@@ -4940,8 +4940,8 @@ packages that integrate with agent-shell programmatically.
 Resolution order: viewport → current buffer → project buffers → prompt user.
 
 Example:
-  (agent-shell-shell-buffer)           ;; most recently used shell
-  (agent-shell-shell-buffer :no-error t) ;; nil instead of error when none found"
+  (agent-shell-shell-buffer)
+  (agent-shell-shell-buffer :no-error t)"
   (agent-shell--shell-buffer :viewport-buffer viewport-buffer
                              :no-error no-error
                              :no-create no-create))
