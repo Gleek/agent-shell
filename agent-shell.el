@@ -579,7 +579,23 @@ or `turn-complete'), an `idle' event is emitted after this many
 seconds of inactivity.  Activity events (`permission-response',
 `tool-call-update', `input-submitted', `clean-up') cancel the timer.
 
-When nil, defaults to 30 seconds.")
+Can be a number (same timeout for all events) or an alist mapping
+event symbols to timeouts:
+
+  (setq agent-shell-idle-timeout
+        \\='((permission-request . 10)
+          (turn-complete . 60)))
+
+Defaults to 30 seconds when nil or when an event has no entry.")
+
+(cl-defun agent-shell-idle-timeout (&key event)
+  "Resolve idle timeout in seconds.
+When EVENT is non-nil, look it up in `agent-shell-idle-timeout'
+if it is an alist.  Falls back to 30 seconds."
+  (or (if (listp agent-shell-idle-timeout)
+          (map-elt agent-shell-idle-timeout event)
+        agent-shell-idle-timeout)
+      30))
 
 (defcustom agent-shell-outgoing-request-decorator nil
   "Function to decorate outgoing ACP requests before they are sent.
@@ -3751,7 +3767,7 @@ the original EVENT as :idle-event."
   (agent-shell--cancel-idle-timer)
   (when-let ((buffer (map-elt (agent-shell--state) :buffer)))
     (map-put! (agent-shell--state) :idle-timer
-              (run-at-time (or agent-shell-idle-timeout 30) nil
+              (run-at-time (agent-shell-idle-timeout :event event) nil
                            (lambda ()
                              (when (buffer-live-p buffer)
                                (with-current-buffer buffer

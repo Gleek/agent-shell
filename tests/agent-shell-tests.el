@@ -1224,6 +1224,25 @@ code block content
         (agent-shell--start-idle-timer :event 'permission-request)
         (should (timerp (map-elt agent-shell--state :idle-timer)))))))
 
+(ert-deftest agent-shell-idle-event-per-event-timeout-test ()
+  "Test that idle timer uses per-event timeout from alist."
+  (with-temp-buffer
+    (let ((agent-shell--state (list (cons :buffer (current-buffer))
+                                    (cons :event-subscriptions nil)
+                                    (cons :idle-timer nil)))
+          (agent-shell-idle-timeout '((permission-request . 0.01)
+                                      (turn-complete . 999)))
+          (fired nil))
+      (cl-letf (((symbol-function 'agent-shell--state)
+                 (lambda () agent-shell--state)))
+        (agent-shell-subscribe-to
+         :shell-buffer (current-buffer)
+         :event 'idle
+         :on-event (lambda (_event) (setq fired t)))
+        (agent-shell--start-idle-timer :event 'permission-request)
+        (sit-for 0.05)
+        (should fired)))))
+
 (ert-deftest agent-shell-idle-event-includes-trigger-and-buffer-test ()
   "Test that idle event data includes the trigger event and buffer."
   (with-temp-buffer
