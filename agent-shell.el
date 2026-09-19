@@ -82,6 +82,7 @@
 (require 'agent-shell-heartbeat)
 (require 'agent-shell-active-message)
 (require 'agent-shell-hermes)
+(require 'agent-shell-junie)
 (require 'agent-shell-kimi)
 (require 'agent-shell-kiro)
 (require 'agent-shell-mistral)
@@ -776,6 +777,7 @@ example filtering them.  See `agent-shell-agent-configs'."
         #'agent-shell-google-make-gemini-config
         #'agent-shell-goose-make-agent-config
         #'agent-shell-hermes-make-agent-config
+        #'agent-shell-junie-make-agent-config
         #'agent-shell-kimi-make-config
         #'agent-shell-kiro-make-config
         #'agent-shell-mistral-make-config

@@ -38,6 +38,7 @@ With agent-shell, you can interact with any ACP-driven agent like:
 - [[https://github.com/can1357/oh-my-pi][Oh My Pi]]
 - [[https://opencode.ai][Opencode]]
 - [[https://antigravity.google/docs/ide/extensions][Antigravity]] (Google)
+- [[https://junie.jetbrains.com/docs/junie-cli-acp.html][Junie]] (JetBrains)
 
 [[https://www.youtube.com/watch?v=R2Ucr3amgGg][agent-shell - YouTube]]
 
@@ -187,6 +188,16 @@ codebuddy --acp
 #+end_src
 
 See https://www.codebuddy.ai/docs/zh/ide/Getting-Started/Installation for details.
+
+*** Junie
+
+For Junie, install the [[https://junie.jetbrains.com/docs/junie-cli.html][Junie CLI]] and ensure ACP mode is available:
+
+#+begin_src bash
+junie --acp true
+#+end_src
+
+See https://junie.jetbrains.com/docs/junie-cli-acp.html for details.
 
 *** Kiro CLI
 
@@ -781,6 +792,7 @@ Start a specific agent shell session directly:
 - =M-x agent-shell-goose-start-agent= - Start a Goose agent session
 - =M-x agent-shell-xai-start-grok= - Start a Grok Build (xAI) agent session
 - =M-x agent-shell-cursor-start-agent= - Start a Cursor agent session
+- =M-x agent-shell-junie-start-agent= - Start a Junie agent session
 - =M-x agent-shell-kiro-start-agent= - Start a Kiro CLI agent session
 - =M-x agent-shell-mistral-start-vibe= - Start a Mistral Vibe agent session
 - =M-x agent-shell-qwen-start= - Start a Qwen Code agent session
@@ -1073,6 +1085,8 @@ always go to Evil modes if you need to with ~C-z~).
 | agent-shell-hermes-environment                | Environment variables for the Hermes agent client.                              |
 | agent-shell-highlight-blocks                  | Whether or not to highlight source blocks.                                      |
 | agent-shell-inhibit-system-sleep              | Non-nil to keep the system awake while an agent is busy.                        |
+| agent-shell-junie-acp-command                 | Command and parameters for the JetBrains Junie ACP client.                      |
+| agent-shell-junie-environment                 | Environment variables for the Junie ACP client.                                 |
 | agent-shell-kimi-acp-command                  | Command and parameters for the Kimi Code CLI client.                            |
 | agent-shell-kimi-default-model-id             | Default Kimi model ID.                                                          |
 | agent-shell-kimi-default-session-mode-id      | Default Kimi Code session mode ID.                                              |
@@ -1225,6 +1239,7 @@ always go to Evil modes if you need to with ~C-z~).
 |                                                       | agent-shell-insert-shell-command-output                 | Execute a shell command and insert output as a code block.                    |
 | C-c C-c                                               | agent-shell-interrupt                                   | Interrupt in-progress request and reject all pending permissions.             |
 |                                                       | agent-shell-jump-to-latest-permission-button-row        | Jump to the latest permission button row.                                     |
+|                                                       | agent-shell-junie-start-agent                           | Start an interactive Junie agent shell.                                       |
 |                                                       | agent-shell-kimi-start-agent                            | Start an interactive Kimi Code agent shell.                                   |
 |                                                       | agent-shell-kiro-start-agent                            | Start an interactive Kiro agent shell.                                        |
 |                                                       | agent-shell-list-edit-dedent-line                       | De-indent the current list item.                                              |
