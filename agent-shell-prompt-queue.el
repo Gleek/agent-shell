@@ -278,7 +278,7 @@ is submitted mid-turn: the shell prompt and the viewport's compose
 buffer alike.
 
 `agent-shell-busy-submit-override-function' is what
-\[agent-shell-submit-override] reaches for instead, so setting one of
+\\[agent-shell-submit-override] reaches for instead, so setting one of
 these to each function makes both available without choosing."
   :type '(choice (const :tag "Queue until the turn ends" agent-shell-busy-submit-queue)
                  (const :tag "Steer into the running turn" agent-shell-busy-submit-steer)
@@ -287,14 +287,14 @@ these to each function makes both available without choosing."
 
 (defcustom agent-shell-busy-submit-override-function
   #'agent-shell-busy-submit-steer
-  "Function \[agent-shell-submit-override] submits through.
+  "Function \\[agent-shell-submit-override] submits through.
 
 Called with one argument, the prompt string, and only when the agent is
 working.  Overrides `agent-shell-busy-submit-default-function' for that
 one submission.
 
-Reached from both surfaces: \[agent-shell-submit-override] at the shell
-prompt, and \[agent-shell-viewport-compose-send-override] in the
+Reached from both surfaces: \\[agent-shell-submit-override] at the shell
+prompt, and \\[agent-shell-viewport-compose-send-override] in the
 viewport's compose buffer, which keeps its own prefix for keeping that
 buffer open."
   :type '(choice (const :tag "Queue until the turn ends" agent-shell-busy-submit-queue)

@@ -780,6 +780,20 @@ In view mode, use =r= to compose a reply, =R= to quote the response in a reply, 
 Do not invoke =agent-shell-viewport-edit-mode= or =agent-shell-viewport-view-mode= directly in an agent shell buffer.  They are major modes installed by the entry points above on the separate viewport buffer, not commands for converting the shell buffer.
 #+end_quote
 
+*** Typing while the agent is busy
+
+When =agent-shell-persistent-prompt-enabled= is set, the shell keeps a writable prompt at the end of the buffer at all times (including agent busy times).
+
+Submitting into a busy agent queues the prompt by default.  =RET= submits via =agent-shell-busy-submit-default-function= (queues), while =M-RET= and =C-u RET= submit via =agent-shell-busy-submit-override-function= (steers).  Steering is covered in the next section.
+
+To disable/hide the persistent prompt, unset the related option:
+
+#+begin_src emacs-lisp
+(setopt agent-shell-persistent-prompt-enabled nil)
+#+end_src
+
+The viewport's compose buffer is available either way, and submitting from it mid-turn routes the same.
+
 *** Steering a running turn
 
 A prompt sent while the agent is working is queued and submitted once the turn ends.  Agents that support steering can take it into the turn already running instead, so a wrong direction can be corrected without waiting for it to finish.  Steering is an ACP extension (=_session/steering=) rather than part of the spec, advertised by the agent at initialization: the Claude and Codex packages implement it, other agents keep queueing.
@@ -1051,6 +1065,8 @@ always go to Evil modes if you need to with ~C-z~).
 | agent-shell-auggie-environment                | Environment variables for the Auggie client.                                    |
 | agent-shell-buffer-name-format                | Format to use when generating agent shell buffer names.                         |
 | agent-shell-busy-indicator-frames             | Frames for the busy indicator animation.                                        |
+| agent-shell-busy-submit-default-function      | Function deciding what submitting while the agent is working does.              |
+| agent-shell-busy-submit-override-function     | Function M-x agent-shell-submit-override submits through.                       |
 | agent-shell-chat-mode-enabled                 | Whether a new agent shell enables ‘agent-shell-chat-mode’ by default.           |
 | agent-shell-chat-mode-hook                    | Hook run after entering or leaving ‘agent-shell-chat-mode’.                     |
 | agent-shell-cline-acp-command                 | Command and parameters for the Cline agent client.                              |
@@ -1122,19 +1138,18 @@ always go to Evil modes if you need to with ~C-z~).
 | agent-shell-openai-default-session-mode-id    | Default Codex session mode ID.                                                  |
 | agent-shell-opencode-acp-command              | Command and parameters for the OpenCode client.                                 |
 | agent-shell-opencode-authentication           | Configuration for OpenCode authentication.                                      |
+| agent-shell-opencode-default-config-options   | Default OpenCode config options, applied at session start.                      |
 | agent-shell-opencode-default-model-id         | Default OpenCode model ID.                                                      |
 | agent-shell-opencode-default-session-mode-id  | Default OpenCode session mode ID.                                               |
 | agent-shell-opencode-environment              | Environment variables for the OpenCode client.                                  |
 | agent-shell-outgoing-request-decorator        | Function to decorate outgoing ACP requests before they are sent.                |
 | agent-shell-path-resolver-function            | Function for resolving remote paths on the local file-system, and vice versa.   |
 | agent-shell-permission-icon                   | Icon displayed when shell commands require permission to execute.               |
+| agent-shell-persistent-prompt-enabled         | Whether a shell keeps a writable prompt at the buffer end at all times.         |
 | agent-shell-pi-acp-command                    | Command and parameters for the Pi ACP client.                                   |
 | agent-shell-pi-environment                    | Environment variables for the Pi client.                                        |
 | agent-shell-prefer-viewport-interaction       | Non-nil makes ‘agent-shell’ prefer viewport interaction over shell interaction. |
 | agent-shell-preferred-agent-config            | Default agent to use for all new shells.                                        |
-| agent-shell-prompt-bar-input-mode-hook        | Hook run after entering or leaving ‘agent-shell-prompt-bar-input-mode’.         |
-| agent-shell-prompt-bar-mode                   | Non-nil if Agent-Shell-Prompt-Bar mode is enabled.                              |
-| agent-shell-prompt-bar-mode-hook              | Hook run after entering or leaving ‘agent-shell-prompt-bar-mode’.               |
 | agent-shell-qoder-acp-command                 | Command and parameters for the Qoder CLI ACP server.                            |
 | agent-shell-qoder-environment                 | Environment variables for the Qoder CLI ACP server.                             |
 | agent-shell-qwen-acp-command                  | Command and parameters for the Qwen Code client.                                |
@@ -1143,12 +1158,13 @@ always go to Evil modes if you need to with ~C-z~).
 | agent-shell-screenshot-command                | The program to use for capturing screenshots.                                   |
 | agent-shell-section-functions                 | Abnormal hook run after overlays are applied (experimental).                    |
 | agent-shell-session-choices-function          | Function to transform the choices offered when starting a shell.                |
+| agent-shell-session-list-page-limit           | Maximum number of pages to request when listing sessions.                       |
 | agent-shell-session-restore-verbosity         | How much prior context to show when restoring a session.                        |
 | agent-shell-session-strategy                  | How to handle sessions when starting a new shell.                               |
 | agent-shell-show-busy-indicator               | Non-nil to show the busy indicator animation in the header and mode line.       |
 | agent-shell-show-config-icons                 | Whether to show icons in agent config selection.                                |
 | agent-shell-show-context-usage-indicator      | Whether and how to show the context usage indicator.                            |
-| agent-shell-show-cost-indicator               | Whether to show the session's cumulative cost in the header.                    |
+| agent-shell-show-cost-indicator               | Whether to show the session’s cumulative cost in the header.                    |
 | agent-shell-show-session-id                   | Non-nil to display the session ID in the header and session selection.          |
 | agent-shell-show-usage-at-turn-end            | Whether to display usage information when agent turn ends.                      |
 | agent-shell-show-welcome-message              | Non-nil to show welcome message.                                                |
@@ -1226,7 +1242,6 @@ always go to Evil modes if you need to with ~C-z~).
 |                                                       | agent-shell-copy-as-markdown                            | Copy the region between BEG and END to the kill ring as markdown.             |
 |                                                       | agent-shell-copy-last-output                            | Copy the last agent output to the kill ring.                                  |
 |                                                       | agent-shell-copy-link-url-at-point                      | Copy the rendered Markdown link URL at POS (or point) to the kill ring.       |
-|                                                       | agent-shell-copy-output                                 | Copy the shell output to the kill ring.                                       |
 |                                                       | agent-shell-copy-session-id                             | Copy the current session ID to the kill ring.                                 |
 |                                                       | agent-shell-copy-source-block-at-point                  | Copy the rendered fenced code block body at POS (or point) to the kill ring.  |
 |                                                       | agent-shell-cursor-start-agent                          | Start an interactive Cursor agent shell.                                      |
@@ -1286,9 +1301,6 @@ always go to Evil modes if you need to with ~C-z~).
 | C-<up> or M-p                                         | agent-shell-previous-input                              | Cycle backwards through input history, saving input.                          |
 | p or <backtab>                                        | agent-shell-previous-item                               | Go to previous item.                                                          |
 |                                                       | agent-shell-previous-permission-button                  | Jump to the previous button.                                                  |
-|                                                       | agent-shell-prompt-bar-input-mode                       | Minor mode for the `agent-shell' prompt bar input buffer.                     |
-|                                                       | agent-shell-prompt-bar-mode                             | Toggle an in-frame prompt bar glued below every `agent-shell' window.         |
-|                                                       | agent-shell-prompt-bar-submit                           | Submit the bar's prompt to its shell, or queue it when busy.                  |
 |                                                       | agent-shell-prompt-compose                              | Compose an `agent-shell' prompt in a dedicated buffer.                        |
 |                                                       | agent-shell-prompt-queue                                | Queue or immediately send a prompt depending on shell busy state.             |
 |                                                       | agent-shell-prompt-queue-remove                         | Remove all pending prompts or a specific prompt by REMOVE-INDEX.              |
@@ -1320,7 +1332,8 @@ always go to Evil modes if you need to with ~C-z~).
 | C-c C-v                                               | agent-shell-set-session-model                           | Set session model.                                                            |
 | C-c C-t                                               | agent-shell-set-session-thought-level                   | Set thought level (reasoning effort) for the current session.                 |
 |                                                       | agent-shell-show-usage                                  | Display current session usage information in the minibuffer.                  |
-| RET                                                   | agent-shell-submit                                      | Submit the current input to the agent.                                        |
+| RET                                                   | agent-shell-submit                                      | Submit the current input to the agent, or queue it while the agent is busy.   |
+| M-<return> or M-RET                                   | agent-shell-submit-override                             | Submit the current input through the override route.                          |
 |                                                       | agent-shell-switch-buffer                               | Switch to another `agent-shell-mode' buffer via `completing-read'.            |
 |                                                       | agent-shell-toggle                                      | Toggle agent shell display.                                                   |
 |                                                       | agent-shell-toggle-logging                              | Toggle logging.                                                               |
@@ -1341,6 +1354,7 @@ always go to Evil modes if you need to with ~C-z~).
 |                                                       | agent-shell-viewport-compose-send-and-dismiss           | Queue or send the composed prompt, then dismiss the compose window.           |
 |                                                       | agent-shell-viewport-compose-send-and-kill              | Send the viewport composed prompt to the agent shell and kill compose buffer. |
 |                                                       | agent-shell-viewport-compose-send-and-wait-for-response | Send the viewport composed prompt and display response in viewport.           |
+|                                                       | agent-shell-viewport-compose-send-override              | Send the viewport composed prompt through the override route.                 |
 |                                                       | agent-shell-viewport-copy-session-id                    | Copy the current session ID to the kill ring.                                 |
 |                                                       | agent-shell-viewport-cycle-session-mode                 | Cycle through available session modes.                                        |
 |                                                       | agent-shell-viewport-edit-mode                          | Major mode for composing agent shell prompts.                                 |

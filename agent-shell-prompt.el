@@ -42,7 +42,7 @@
 (require 'shell-maker)
 (eval-when-compile (require 'cl-lib))
 
-(defcustom agent-shell-persistent-prompt-enabled nil
+(defcustom agent-shell-persistent-prompt-enabled t
   "Whether a shell keeps a writable prompt at the buffer end at all times.
 
 When non-nil, the prompt returns as soon as a submission is dispatched
@@ -111,7 +111,11 @@ prompt, rather than leaving a shell that scribbles over its own input."
    ((agent-shell--live-input-prompt-p comint-last-prompt)
     (car comint-last-prompt))
    (agent-shell-persistent-prompt-enabled
-    (error "No live prompt to render above (buffer: %s)" (buffer-name)))))
+    (error "No live prompt to render above (buffer: %s).  \
+Please report this at https://github.com/xenodium/agent-shell/issues.  \
+Recover with M-x agent-shell-reload, which resumes the session in a fresh \
+shell, or opt out via `agent-shell-persistent-prompt-enabled'"
+           (buffer-name)))))
 
 (defmacro agent-shell--with-buffer-narrowed-to (prompt-start &rest body)
   "Run BODY with the buffer narrowed to everything before PROMPT-START.
