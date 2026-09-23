@@ -540,6 +540,54 @@ image-rendering path as `![alt](uri)'."
            "first\n\nsecond"))
   (should (equal (agent-shell--tool-call-update-output-markdown nil) "")))
 
+(ert-deftest agent-shell--truncate-tool-output-lines-test ()
+  "Keep short lines intact and shorten only long tool output lines."
+  (let* ((agent-shell-tool-output-max-line-length 512)
+         (long-line (concat (make-string 300 ?a) (make-string 300 ?z)))
+         (output (concat "short\n" long-line "\nlast")))
+    (should (equal (agent-shell--truncate-tool-output-lines output)
+                   (concat "short\n"
+                           (make-string 200 ?a)
+                           " ... [200 characters omitted] ... "
+                           (make-string 200 ?z)
+                           "\nlast")))
+    (should (equal (agent-shell--truncate-tool-output-lines
+                    (make-string 512 ?x))
+                   (make-string 512 ?x)))
+    (let ((agent-shell-tool-output-max-line-length -1))
+      (should (equal (agent-shell--truncate-tool-output-lines output)
+                     output)))))
+
+(ert-deftest agent-shell-tool-output-limit-applies-to-chat-and-transcript-test ()
+  "Use the same shortened tool output in the chat and transcript."
+  (let* ((agent-shell-tool-output-max-line-length 512)
+         (raw (make-string 600 ?x))
+         (state (agent-shell--make-state))
+         chat transcript)
+    (cl-letf (((symbol-function 'agent-shell--update-fragment)
+               (lambda (&rest args) (setq chat (plist-get args :body))))
+              ((symbol-function 'agent-shell--append-transcript)
+               (lambda (&rest args) (setq transcript (plist-get args :text))))
+              ((symbol-function 'agent-shell--refresh-activity-group-header) #'ignore)
+              ((symbol-function 'agent-shell--sync-activity-group-fold) #'ignore)
+              ((symbol-function 'agent-shell--delete-fragment) #'ignore)
+              ((symbol-function 'agent-shell--cancel-idle-timer) #'ignore)
+              ((symbol-function 'agent-shell--emit-event) #'ignore)
+              ((symbol-function 'agent-shell-make-tool-call-label)
+               (lambda (&rest _) '((:status . "done") (:title . "tool")))))
+      (agent-shell--on-notification
+       :state state
+       :acp-notification
+       `((method . "session/update")
+         (params (update (sessionUpdate . "tool_call_update")
+                         (toolCallId . "tool-1")
+                         (status . "completed")
+                         (rawOutput (formatted_output . ,raw)))))))
+    (should (string-search "[200 characters omitted]" chat))
+    (should (string-search "[200 characters omitted]" transcript))
+    (should-not (string-match-p (regexp-quote raw) chat))
+    (should-not (string-match-p (regexp-quote raw) transcript))))
+
 (ert-deftest agent-shell--image-data-to-file-test ()
   "Test `agent-shell--image-data-to-file'.
 
