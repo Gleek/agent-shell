@@ -1326,9 +1326,9 @@ prompt to submit from mid-turn is up to
 on it: the same setting governs the viewport's compose buffer, which is
 there either way.
 
-With \[universal-argument] prefix ARG, submit through
+With \\[universal-argument] prefix ARG, submit through
 `agent-shell-busy-submit-override-function' instead, which steers by
-default.  \[agent-shell-submit-override] is bound to the same thing.
+default.  \\[agent-shell-submit-override] is bound to the same thing.
 
 This owns the `agent-shell-submit' name because shell-maker's
 per-start aliasing is disabled (see the `:alias-commands nil' call in
@@ -1352,7 +1352,7 @@ Submits through `agent-shell-busy-submit-override-function' rather than
 `agent-shell-busy-submit-default-function', so whichever of queueing and
 steering is not the default is one keystroke away.
 
-Only differs from \[agent-shell-submit] while the agent is working:
+Only differs from \\[agent-shell-submit] while the agent is working:
 with no turn to queue behind or steer into, both simply submit."
   (declare (modes agent-shell-mode))
   (interactive)

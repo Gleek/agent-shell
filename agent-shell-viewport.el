@@ -235,11 +235,11 @@ queued right away, regardless of `agent-shell-viewport-dismiss-on-send'."
 Mid-turn the prompt goes to `agent-shell-busy-submit-override-function'
 rather than `agent-shell-busy-submit-default-function', so whichever of
 queueing and steering is not the default is one keystroke away.  With no
-turn running both simply submit, as \[agent-shell-viewport-compose-send]
+turn running both simply submit, as \\[agent-shell-viewport-compose-send]
 does.
 
-KEEP-COMPOSING behaves as it does there, so \[universal-argument]
-\[agent-shell-viewport-compose-send-override] overrides the route and
+KEEP-COMPOSING behaves as it does there, so \\[universal-argument]
+\\[agent-shell-viewport-compose-send-override] overrides the route and
 keeps the compose buffer open for the next prompt.
 
 Rebinds the default for this one call rather than threading a flag
