@@ -7691,5 +7691,69 @@ display, which tests don't have."
             (should (equal (get-text-property 0 'display text) '(image :type png)))))
       (delete-directory dir t))))
 
+(ert-deftest agent-shell--preserving-display-override-survives-command-end-test ()
+  "A deferred display still honours a window prefix like `other-window-prefix'.
+
+`display-buffer-override-next-command' drops its override from
+`display-buffer-overriding-action' once the command that set it ends, so a
+display deferred to a later ACP event would otherwise ignore the prefix.
+The wrapper captures the override while the command is still running."
+  (let* ((display-buffer-overriding-action (cons nil nil))
+         (post-command-hook nil)
+         ;; `display-buffer-override-next-command' sets this globally and
+         ;; restores it on cleanup.  Bind it so a failure can't leak into
+         ;; the tests that follow.
+         (switch-to-buffer-obey-display-actions switch-to-buffer-obey-display-actions)
+         (exit-override (display-buffer-override-next-command
+                         (lambda (buffer alist)
+                           (cons (display-buffer-use-some-window buffer alist) 'reuse))))
+         (display (agent-shell--preserving-display-override
+                   (lambda (_event) (car display-buffer-overriding-action)))))
+    ;; Stands in for `post-command-hook' running once the command ends.
+    (funcall exit-override)
+    (should-not (car display-buffer-overriding-action))
+    (should (funcall display nil))))
+
+(ert-deftest agent-shell--deferred-display-honours-other-window-prefix-test ()
+  "A deferred shell display still honours `other-window-prefix'.
+
+With `agent-shell-session-strategy' set to `prompt', the display is deferred
+to a `session-selected' subscriber that runs from the ACP process filter,
+long after the command loop retired the prefix's override.  Without the
+capture, the shell falls back to `agent-shell-display-action', which shows
+it in the current window."
+  (let ((shell-buffer (generate-new-buffer "*agent-shell-prefix-test*"))
+        (display-buffer-overriding-action (cons nil nil))
+        (post-command-hook nil)
+        ;; `display-buffer-override-next-command' sets this globally and
+        ;; restores it on cleanup.  Bind it so a failure can't leak into
+        ;; the tests that follow.
+        (switch-to-buffer-obey-display-actions switch-to-buffer-obey-display-actions))
+    (unwind-protect
+        (let ((state (list (cons :buffer shell-buffer)
+                           (cons :event-subscriptions nil))))
+          (with-current-buffer shell-buffer
+            (setq-local agent-shell-session-strategy 'prompt)
+            (setq-local agent-shell--state state))
+          (cl-letf (((symbol-function 'agent-shell--state) (lambda () state)))
+            (save-window-excursion
+              (delete-other-windows)
+              (split-window)
+              (let ((origin (selected-window)))
+                ;; C-x 4 4
+                (let ((this-command 'other-window-prefix))
+                  (other-window-prefix))
+                ;; M-x agent-shell, which defers the display to `session-selected'.
+                (agent-shell--display-and-insert-context shell-buffer nil)
+                ;; The command loop retires the prefix now that the command ended.
+                (let ((this-command 'agent-shell))
+                  (run-hooks 'post-command-hook))
+                (should-not (car display-buffer-overriding-action))
+                ;; The agent replies and a session gets picked.
+                (agent-shell--emit-event :event 'session-selected)
+                (should (eq (window-buffer (selected-window)) shell-buffer))
+                (should-not (eq (selected-window) origin))))))
+      (kill-buffer shell-buffer))))
+
 (provide 'agent-shell-tests)
 ;;; agent-shell-tests.el ends here
