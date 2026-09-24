@@ -1326,9 +1326,9 @@ prompt to submit from mid-turn is up to
 on it: the same setting governs the viewport's compose buffer, which is
 there either way.
 
-With \[universal-argument] prefix ARG, submit through
+With \\[universal-argument] prefix ARG, submit through
 `agent-shell-busy-submit-override-function' instead, which steers by
-default.  \[agent-shell-submit-override] is bound to the same thing.
+default.  \\[agent-shell-submit-override] is bound to the same thing.
 
 This owns the `agent-shell-submit' name because shell-maker's
 per-start aliasing is disabled (see the `:alias-commands nil' call in
@@ -1352,7 +1352,7 @@ Submits through `agent-shell-busy-submit-override-function' rather than
 `agent-shell-busy-submit-default-function', so whichever of queueing and
 steering is not the default is one keystroke away.
 
-Only differs from \[agent-shell-submit] while the agent is working:
+Only differs from \\[agent-shell-submit] while the agent is working:
 with no turn to queue behind or steer into, both simply submit."
   (declare (modes agent-shell-mode))
   (interactive)
@@ -1371,8 +1371,9 @@ with no turn to queue behind or steer into, both simply submit."
         (agent-shell-subscribe-to
          :shell-buffer shell-buffer
          :event 'session-selected
-         :on-event (lambda (_event)
-                     (agent-shell--display-buffer shell-buffer))))
+         :on-event (agent-shell--preserving-display-override
+                    (lambda (_event)
+                      (agent-shell--display-buffer shell-buffer)))))
     (agent-shell--display-buffer shell-buffer)
     (when text
       (agent-shell--insert-to-shell-buffer :text text
@@ -1392,9 +1393,10 @@ buffer, which is confusing.  APPEND, OVERRIDE and EDIT are forwarded to
       (agent-shell-subscribe-to
        :shell-buffer shell-buffer
        :event 'session-selected
-       :on-event (lambda (_event)
-                   (agent-shell-viewport--show-buffer
-                    :append append :override override :edit edit :shell-buffer shell-buffer)))
+       :on-event (agent-shell--preserving-display-override
+                  (lambda (_event)
+                    (agent-shell-viewport--show-buffer
+                     :append append :override override :edit edit :shell-buffer shell-buffer))))
     (agent-shell-viewport--show-buffer
      :append append :override override :edit edit :shell-buffer shell-buffer)))
 
@@ -4961,8 +4963,9 @@ variable (see makunbound)"))
             (agent-shell-subscribe-to
              :shell-buffer shell-buffer
              :event 'session-selected
-             :on-event (lambda (_event)
-                         (agent-shell--display-buffer shell-buffer)))
+             :on-event (agent-shell--preserving-display-override
+                        (lambda (_event)
+                          (agent-shell--display-buffer shell-buffer))))
           (agent-shell--display-buffer shell-buffer))))
     shell-buffer))
 
@@ -6340,6 +6343,25 @@ INSTALL-INSTRUCTIONS is optional installation guidance."
   (concat (format "Executable \"%s\" not found.  Do you need (add-to-list 'exec-path \"another/path/to/consider/\")?" executable)
           (when install-instructions
             (concat "  " install-instructions))))
+
+(defun agent-shell--preserving-display-override (function)
+  "Return FUNCTION wrapped to display buffers as the current command would.
+
+Displaying a shell is sometimes deferred to an event subscriber that
+runs after the command that started the shell has finished.  By then
+`display-buffer-override-next-command' (behind `other-window-prefix',
+`same-window-prefix', etc.) has already removed its override from
+`display-buffer-overriding-action', so the deferred display would
+ignore the prefix.  Capture the override now and reinstate it around
+FUNCTION."
+  ;; Copy rather than capture the value: `display-buffer-override-next-command'
+  ;; clears its override by mutating the same cons cell in place with `setcar'
+  ;; (and `delq' on the list of actions), so a captured reference would be
+  ;; emptied along with the global.
+  (let ((overriding-action (copy-tree display-buffer-overriding-action)))
+    (lambda (&rest args)
+      (let ((display-buffer-overriding-action overriding-action))
+        (apply function args)))))
 
 (defun agent-shell--display-buffer (shell-buffer)
   "Toggle agent SHELL-BUFFER display."
