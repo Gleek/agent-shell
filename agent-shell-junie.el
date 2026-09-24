@@ -106,9 +106,8 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
                                 :environment-variables agent-shell-junie-environment
                                 :context-buffer buffer))
 
-
 (defun agent-shell-junie--welcome-message (config)
-  "Return Kimi ASCII art using `shell-maker' CONFIG."
+  "Return Junie ASCII art using `shell-maker' CONFIG."
   (let ((art (agent-shell--indent-string 4 (agent-shell-junie--ascii-art)))
         (message (string-trim-left (shell-maker-welcome-message config) "\n")))
     (concat "\n\n"
@@ -117,18 +116,18 @@ Returns an agent configuration alist using `agent-shell-make-agent-config'."
             message)))
 
 (defun agent-shell-junie--ascii-art ()
-  "Kimi ASCII art."
+  "Junie ASCII art."
   (let* ((is-dark (eq (frame-parameter nil 'background-mode) 'dark))
          (text (string-trim "
-       ///////               ///                           ///             
-       ///////               ///                           ///             
-       ///////               ///  ///     ///  /////////         ///////   
-///////      ///////         ///  ///     ///  //////////  ///  ////////// 
+       ///////               ///                           ///
+       ///////               ///                           ///
+       ///////               ///  ///     ///  /////////         ///////
+///////      ///////         ///  ///     ///  //////////  ///  //////////
 ///////      ///////         ///  ///     ///  ///     /// /// ///     ////
 ///////     ////////         ///  ///     ///  ///     /// /// ////////////
-       ///////////           ///  ///    ////  ///     /// /// ///         
+       ///////////           ///  ///    ////  ///     /// /// ///
        /////////        ////////  //////////   ///     /// ///  ///////////
-       //////           //////     ////////    ///     /// ///   ////////  
+       //////           //////     ////////    ///     /// ///   ////////
 " "\n")))
     (propertize text 'font-lock-face (if is-dark
                                          '(:foreground "#dddddd" :inherit fixed-pitch)

@@ -1126,6 +1126,8 @@ always go to Evil modes if you need to with ~C-z~).
 | agent-shell-highlight-blocks                  | Whether or not to highlight source blocks.                                      |
 | agent-shell-inhibit-system-sleep              | Non-nil to keep the system awake while an agent is busy.                        |
 | agent-shell-junie-acp-command                 | Command and parameters for the JetBrains Junie ACP client.                      |
+| agent-shell-junie-default-model-id            | Default Junie model ID.                                                         |
+| agent-shell-junie-default-session-mode-id     | Default Junie session mode ID.                                                  |
 | agent-shell-junie-environment                 | Environment variables for the Junie ACP client.                                 |
 | agent-shell-kimi-acp-command                  | Command and parameters for the Kimi Code CLI client.                            |
 | agent-shell-kimi-default-model-id             | Default Kimi model ID.                                                          |
