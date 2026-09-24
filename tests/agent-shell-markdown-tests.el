@@ -4583,6 +4583,43 @@ for a fully-selected buffer."
     (search-forward "⧉")
     (should-not (agent-shell-markdown-source-block-at-point (1- (point))))))
 
+(defun agent-shell-markdown-tests--first-file-reference (text)
+  "Return the first bare `path:line' reference found in TEXT, or nil."
+  (with-temp-buffer
+    (insert text)
+    (goto-char (point-min))
+    (when-let* ((found (agent-shell-markdown--search-file-reference)))
+      (buffer-substring (car found) (cdr found)))))
+
+(ert-deftest agent-shell-markdown-search-file-reference ()
+  ;; What `agent-shell-markdown--search-file-reference' finds is what a
+  ;; regexp for the whole reference would, with the path read back from
+  ;; the location rather than matched forward.
+  (should (equal "docs/audit.md:500"
+                 (agent-shell-markdown-tests--first-file-reference
+                  "see docs/audit.md:500 now")))
+  (should (equal "foo.el#L12-L14"
+                 (agent-shell-markdown-tests--first-file-reference
+                  "at foo.el#L12-L14 here")))
+  ;; A path does not start with `+' or `-'.
+  (should (equal "foo.el:12"
+                 (agent-shell-markdown-tests--first-file-reference
+                  "--foo.el:12")))
+  ;; No path before the separator, but its location holds one.
+  (should (equal "1:1"
+                 (agent-shell-markdown-tests--first-file-reference ":1:1")))
+  (should (null (agent-shell-markdown-tests--first-file-reference
+                 "meeting at :30")))
+  (should (null (agent-shell-markdown-tests--first-file-reference
+                 "no reference here")))
+  ;; A second search does not read the path back into the first match:
+  ;; `2:3' is not a reference once `a:1:2' has been found.
+  (with-temp-buffer
+    (insert "a:1:2:3")
+    (goto-char (point-min))
+    (should (equal (cons 1 6) (agent-shell-markdown--search-file-reference)))
+    (should (null (agent-shell-markdown--search-file-reference)))))
+
 (provide 'agent-shell-markdown-tests)
 
 ;;; agent-shell-markdown-tests.el ends here
