@@ -3393,9 +3393,10 @@ Clears STATE's `:expanded-activity-group'."
                             (map-nested-elt acp-notification '(params update)))
                            "\n\n"))
                   (diff-text (agent-shell--format-diffs-as-text diffs))
-                  (body-text (if diff-text
-                                 (concat output "\n\n" diff-text)
-                               output))
+                  (body-text (agent-shell--truncate-tool-output-lines
+                              (if diff-text
+                                  (concat output "\n\n" diff-text)
+                                output)))
                   ;; Whether this update introduces a new tool call rather than
                   ;; editing an earlier one in place.  Captured before the
                   ;; group-id helper assigns a group, so an in-place update
@@ -8385,6 +8386,23 @@ Example:
                            (_ (string-remove-prefix "image/" mime-type))))
               ((seq-contains-p image-file-name-extensions extension)))
     (agent-shell--data-to-cache-file data extension)))
+
+(defun agent-shell--truncate-tool-output-lines (output)
+  "Shorten long lines in tool OUTPUT while preserving line breaks.
+
+For example, a 33000-character line keeps its first and last 200
+characters and reports that 32600 characters were omitted."
+  (if (<= (length output) 32768)
+      output
+    (mapconcat (lambda (line)
+                 (if (<= (length line) 32768)
+                     line
+                   (format "%s ... [%d characters omitted] ... %s"
+                           (substring line 0 200)
+                           (- (length line) 400)
+                           (substring line -200))))
+               (split-string output "\n")
+               "\n")))
 
 (defun agent-shell--tool-call-update-output-markdown (acp-update)
   "Return markdown output for ACP-UPDATE, a `tool_call_update' update.
