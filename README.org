@@ -37,7 +37,7 @@ With agent-shell, you can interact with any ACP-driven agent like:
 - [[https://factory.ai][Factory Droid]]
 - [[https://github.com/svkozak/pi-acp][Pi]]
 - [[https://github.com/can1357/oh-my-pi][Oh My Pi]]
-- [[https://opencode.ai][Opencode]]
+- [[https://opencode.ai][OpenCode]]
 - [[https://antigravity.google/docs/ide/extensions][Antigravity]] (Google)
 
 [[https://www.youtube.com/watch?v=R2Ucr3amgGg][agent-shell - YouTube]]
@@ -319,7 +319,7 @@ Alternatively, you can bootstrap the antigravity tool with the following functio
 
 See https://antigravity.google/docs/ide/extensions for details.
 
-*** Opencode + local ollama models
+*** OpenCode + local ollama models
 
 For opencode coding agent, install with:
 
@@ -695,7 +695,7 @@ For API key authentication:
 		   (shell-command-to-string "source ~/.vibe/.env; echo $MISTRAL_API_KEY")))))
 #+end_src
 
-*** Opencode + local ollama Qwen2.5
+*** OpenCode + local ollama Qwen2.5
 
 If ~opencode~ is not found by ~agent-shell~, you can add it to the search path
 
