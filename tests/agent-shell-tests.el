@@ -542,21 +542,24 @@ image-rendering path as `![alt](uri)'."
 
 (ert-deftest agent-shell--truncate-tool-output-lines-test ()
   "Keep short lines intact and shorten only long tool output lines."
-  (let* ((long-line (concat (make-string 16500 ?a) (make-string 16500 ?z)))
+  (let* ((long-line (concat (make-string agent-shell--tool-output-max-line-length ?a)
+                            (make-string agent-shell--tool-output-max-line-length ?z)))
+         (omitted (- (length long-line) (* 2 agent-shell--tool-output-truncation-context-length)))
          (output (concat "short\n" long-line "\nlast")))
     (should (equal (agent-shell--truncate-tool-output-lines output)
                    (concat "short\n"
-                           (make-string 200 ?a)
-                           " ... [32600 characters omitted] ... "
-                           (make-string 200 ?z)
+                           (make-string agent-shell--tool-output-truncation-context-length ?a)
+                           (format " ... [%d characters omitted] ... " omitted)
+                           (make-string agent-shell--tool-output-truncation-context-length ?z)
                            "\nlast")))
     (should (equal (agent-shell--truncate-tool-output-lines
-                    (make-string 32768 ?x))
-                   (make-string 32768 ?x)))))
+                    (make-string agent-shell--tool-output-max-line-length ?x))
+                   (make-string agent-shell--tool-output-max-line-length ?x)))))
 
 (ert-deftest agent-shell-tool-output-limit-applies-to-chat-and-transcript-test ()
   "Use the same shortened tool output in the chat and transcript."
-  (let ((raw (make-string 33000 ?x))
+  (let* ((raw (make-string (* 2 agent-shell--tool-output-max-line-length) ?x))
+         (omitted (- (length raw) (* 2 agent-shell--tool-output-truncation-context-length)))
          (state (agent-shell--make-state))
          chat transcript)
     (cl-letf (((symbol-function 'agent-shell--update-fragment)
@@ -578,8 +581,8 @@ image-rendering path as `![alt](uri)'."
                          (toolCallId . "tool-1")
                          (status . "completed")
                          (rawOutput (formatted_output . ,raw)))))))
-    (should (string-search "[32600 characters omitted]" chat))
-    (should (string-search "[32600 characters omitted]" transcript))
+    (should (string-search (format "[%d characters omitted]" omitted) chat))
+    (should (string-search (format "[%d characters omitted]" omitted) transcript))
     (should-not (string-search raw chat))
     (should-not (string-search raw transcript))))
 

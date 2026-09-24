@@ -8387,20 +8387,31 @@ Example:
               ((seq-contains-p image-file-name-extensions extension)))
     (agent-shell--data-to-cache-file data extension)))
 
+(defconst agent-shell--tool-output-max-line-length 32768
+  "Maximum number of characters in a displayed tool output line.
+
+Longer lines make redisplay and vertical motion crawl (see
+https://github.com/xenodium/agent-shell/issues/839).")
+
+(defconst agent-shell--tool-output-truncation-context-length 200
+  "Number of characters kept at each end of a truncated tool output line.")
+
 (defun agent-shell--truncate-tool-output-lines (output)
   "Shorten long lines in tool OUTPUT while preserving line breaks.
 
-For example, a 33000-character line keeps its first and last 200
-characters and reports that 32600 characters were omitted."
-  (if (<= (length output) 32768)
+Lines longer than `agent-shell--tool-output-max-line-length' keep
+`agent-shell--tool-output-truncation-context-length' characters at each
+end, with an omitted-character count between them.  For example, a
+33000-character line reports that 32600 characters were omitted."
+  (if (<= (length output) agent-shell--tool-output-max-line-length)
       output
     (mapconcat (lambda (line)
-                 (if (<= (length line) 32768)
+                 (if (<= (length line) agent-shell--tool-output-max-line-length)
                      line
                    (format "%s ... [%d characters omitted] ... %s"
-                           (substring line 0 200)
-                           (- (length line) 400)
-                           (substring line -200))))
+                           (substring line 0 agent-shell--tool-output-truncation-context-length)
+                           (- (length line) (* 2 agent-shell--tool-output-truncation-context-length))
+                           (substring line (- agent-shell--tool-output-truncation-context-length)))))
                (split-string output "\n")
                "\n")))
 
