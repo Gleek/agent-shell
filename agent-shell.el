@@ -170,17 +170,6 @@ When non-nil, tool use sections are expanded."
   :type 'boolean
   :group 'agent-shell)
 
-(defcustom agent-shell-tool-output-max-line-length 32768
-  "Maximum number of characters in a displayed tool output line.
-
-Longer lines keep their first and last 200 characters, with an
-omitted-character count between them.  This applies to both the chat
-buffer and new transcripts.  Set to -1 to keep complete lines.
-Positive limits must be at least 512."
-  :type '(choice (const :tag "Unlimited" -1)
-                 (integer :tag "Maximum characters per line"))
-  :group 'agent-shell)
-
 (defcustom agent-shell-activity-group-expand-by-default 'latest
   "When activity group sections should be expanded.
 
@@ -8377,32 +8366,19 @@ Example:
 (defun agent-shell--truncate-tool-output-lines (output)
   "Shorten long lines in tool OUTPUT while preserving line breaks.
 
-For example, with `agent-shell-tool-output-max-line-length' set to
-512, a 600-character line keeps its first and last 200 characters
-and reports that 200 characters were omitted."
-  (let ((limit agent-shell-tool-output-max-line-length)
-        (start 0)
-        (size (length output))
-        parts)
-    (when (and (>= limit 0) (< limit 512))
-      (user-error "Tool output line limit must be -1 or at least 512"))
-    (if (or (< limit 0) (<= size limit))
-        output
-      (while (< start size)
-        (let* ((newline (string-match "\n" output start))
-               (end (or newline size))
-               (line-length (- end start)))
-          (push (concat
-                 (if (<= line-length limit)
-                     (substring output start end)
+For example, a 33000-character line keeps its first and last 200
+characters and reports that 32600 characters were omitted."
+  (if (<= (length output) 32768)
+      output
+    (mapconcat (lambda (line)
+                 (if (<= (length line) 32768)
+                     line
                    (format "%s ... [%d characters omitted] ... %s"
-                           (substring output start (+ start 200))
-                           (- line-length 400)
-                           (substring output (- end 200) end)))
-                 (when newline "\n"))
-                parts)
-          (setq start (if newline (1+ end) size))))
-      (mapconcat #'identity (nreverse parts) ""))))
+                           (substring line 0 200)
+                           (- (length line) 400)
+                           (substring line -200))))
+               (split-string output "\n")
+               "\n")))
 
 (defun agent-shell--tool-call-update-output-markdown (acp-update)
   "Return markdown output for ACP-UPDATE, a `tool_call_update' update.
