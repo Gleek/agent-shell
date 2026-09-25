@@ -4584,10 +4584,14 @@ for a fully-selected buffer."
     (should-not (agent-shell-markdown-source-block-at-point (1- (point))))))
 
 (defun agent-shell-markdown-tests--first-file-reference (text)
-  "Return the first bare `path:line' reference found in TEXT, or nil."
+  "Return the first bare `path:line' reference found in TEXT, or nil.
+
+Searches with `case-fold-search' nil, as
+`agent-shell-markdown--linkify-file-references' does."
   (with-temp-buffer
     (insert text)
     (goto-char (point-min))
+    (setq-local case-fold-search nil)
     (when-let* ((found (agent-shell-markdown--search-file-reference)))
       (buffer-substring (car found) (cdr found)))))
 
@@ -4612,6 +4616,16 @@ for a fully-selected buffer."
                  "meeting at :30")))
   (should (null (agent-shell-markdown-tests--first-file-reference
                  "no reference here")))
+  ;; The separator is `#L', not `#l', so case matters.
+  (should (null (agent-shell-markdown-tests--first-file-reference
+                 "at foo.el#l12 here")))
+  ;; A search finding nothing leaves point where it started, as
+  ;; `re-search-forward' with NOERROR t does.
+  (with-temp-buffer
+    (insert "meeting at :30 and nothing else")
+    (goto-char (point-min))
+    (should (null (agent-shell-markdown--search-file-reference)))
+    (should (= (point) (point-min))))
   ;; A second search does not read the path back into the first match:
   ;; `2:3' is not a reference once `a:1:2' has been found.
   (with-temp-buffer

@@ -4493,8 +4493,12 @@ though; see `agent-shell-markdown--search-file-reference'.")
   "Search forward from point for a bare `path:line' reference.
 
 Return (START . END) of the reference, leaving point at END, or nil
-when there is none, leaving point at the end of the buffer.  A
-reference is how agents cite sources, in the forms
+when there is none, leaving point where it started, as
+`re-search-forward' with NOERROR t does.  Run this with
+`case-fold-search' nil, as
+`agent-shell-markdown--linkify-file-references' does, so that `#L'
+does not also match `#l'.  A reference is how agents cite sources,
+in the forms
 `agent-shell-markdown--parse-local-link' reads: `docs/audit.md:500',
 `src/main.rs:120-140', `foo.el:12:5' and `foo.el#L12'.  A line is
 required, so a bare path in prose is not a reference.
@@ -4523,13 +4527,15 @@ the candidates this finds."
         (skip-chars-backward
          agent-shell-markdown--file-reference-path-chars origin)
         (skip-chars-forward "+-" location)
-        (if (< (point) location)
-            (progn (setq found (cons (point) end))
-                   (goto-char end))
-          ;; No path before this separator, so it is not a reference, but
-          ;; what looked like its location may hold one: `:1:1' has `1:1'
-          ;; in it, the same as a regexp match starting at the `1' would.
-          (goto-char (1+ location)))))
+        (if (>= (point) location)
+            ;; No path before this separator, so it is not a reference, but
+            ;; what looked like its location may hold one: `:1:1' has `1:1'
+            ;; in it, the same as a regexp match starting at the `1' would.
+            (goto-char (1+ location))
+          (setq found (cons (point) end))
+          (goto-char end))))
+    (unless found
+      (goto-char origin))
     found))
 
 (defun agent-shell-markdown--parse-location (location)
@@ -4663,24 +4669,24 @@ For example, the buffer \"see docs/audit.md:500 now\" keeps its text,
 with \"docs/audit.md:500\" faced and opening that file at line 500."
   (let ((case-fold-search nil))
     (goto-char (point-min))
-    (while-let ((reference (agent-shell-markdown--search-file-reference)))
-      (let ((start (car reference))
-            (end (cdr reference)))
-        (if-let* ((avoid (agent-shell-markdown-in-avoid-range-p
-                          start end avoid-ranges)))
-            (goto-char (cdr avoid))
-          ;; Point sits right after the match, so this reads the char the
-          ;; number runs into: `foo.el#L2xy' is a word, not a reference.
-          (when (and (not (looking-at-p (rx (any alnum "_"))))
-                     (agent-shell-markdown--parse-local-link
-                      (buffer-substring-no-properties start end)))
-            ;; Inline code is the one place a frozen tag is expected here,
-            ;; and it is read off the ranges rather than the tag, so no
-            ;; other frozen text can slip through as code.
-            (agent-shell-markdown--linkify-url
-             start end
-             :in-code (agent-shell-markdown-in-avoid-range-p
-                       start end inline-ranges))))))))
+    (while-let ((reference (agent-shell-markdown--search-file-reference))
+                (start (car reference))
+                (end (cdr reference)))
+      (if-let* ((avoid (agent-shell-markdown-in-avoid-range-p
+                        start end avoid-ranges)))
+          (goto-char (cdr avoid))
+        ;; Point sits right after the match, so this reads the char the
+        ;; number runs into: `foo.el#L2xy' is a word, not a reference.
+        (when (and (not (looking-at-p (rx (any alnum "_"))))
+                   (agent-shell-markdown--parse-local-link
+                    (buffer-substring-no-properties start end)))
+          ;; Inline code is the one place a frozen tag is expected here,
+          ;; and it is read off the ranges rather than the tag, so no
+          ;; other frozen text can slip through as code.
+          (agent-shell-markdown--linkify-url
+           start end
+           :in-code (agent-shell-markdown-in-avoid-range-p
+                     start end inline-ranges)))))))
 
 (cl-defun agent-shell-markdown--url-copy-file (&key url file (timeout 5.0) content-type-prefix)
   "Download URL to FILE, returning FILE on success or nil on failure.
