@@ -953,7 +953,8 @@ mouse, a hand pointer, and the target itself on
 `agent-shell-markdown-url' -- which is what
 `agent-shell-markdown-link-url-at-point' reads and what item
 navigation stops on, so a link missing it would open on RET yet stay
-invisible to both.
+invisible to both.  Web URLs also carry `browse-url-data', so
+terminal Emacs can display them as OSC 8 hyperlinks when enabled.
 
 VERB names the action in both hints (see
 `agent-shell-markdown--link-verb' for the default and when it
@@ -983,7 +984,13 @@ browser\", and hovering shows \"Open in browser\"."
                                    (substring text 1)))))
     ;; A hand pointer when over is enough. No need for `mouse-face'.
     (put-text-property start end 'pointer 'hand)
-    (put-text-property start end 'agent-shell-markdown-url url)))
+    (put-text-property start end 'agent-shell-markdown-url url)
+    (let ((case-fold-search t))
+      (put-text-property
+       start end 'browse-url-data
+       (cond ((string-match-p "\\`https?://[^/?#[:space:]]+" url) url)
+             ((string-match-p "\\`www\\.[^/?#[:space:]]+" url)
+              (concat "https://" url)))))))
 
 (defun agent-shell-markdown--add-link-face (start end)
   "Add the link face over [START, END), skipping where it already is.

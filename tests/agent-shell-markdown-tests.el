@@ -290,6 +290,47 @@ streaming **not bold**" nil)))))
                    ("docs" (agent-shell-markdown-link))
                    (" please" nil)))))
 
+(ert-deftest agent-shell-markdown-web-links-have-terminal-url ()
+  (dolist (case '(("[docs](https://example.com/path)" . "https://example.com/path")
+                  ("[docs](http://example.com/path)" . "http://example.com/path")
+                  ("[docs](HTTPS://example.com/path)" . "HTTPS://example.com/path")
+                  ("see https://example.com/path." . "https://example.com/path")
+                  ("www.example.com" . "https://www.example.com")
+                  ("![image](https://example.com/image.png)" . "https://example.com/image.png")))
+    (with-temp-buffer
+      (insert (car case))
+      (agent-shell-markdown-replace-markup :render-images t)
+      (goto-char (point-min))
+      (let ((link (text-property-search-forward 'agent-shell-markdown-url)))
+        (should link)
+        (should (equal (get-text-property (prop-match-beginning link)
+                                          'browse-url-data)
+                       (cdr case)))))))
+
+(ert-deftest agent-shell-markdown-nonweb-links-have-no-terminal-url ()
+  (dolist (url '("mailto:user@example.com" "ftp://example.com/file"
+                 "magnet:?xt=urn:btih:abc" "notes.el:12"
+                 "http://" "www."))
+    (with-temp-buffer
+      (insert (format "[other](%s)" url))
+      (agent-shell-markdown-replace-markup)
+      (should (equal (agent-shell-markdown-link-url-at-point (point-min)) url))
+      (should-not (get-text-property (point-min) 'browse-url-data)))))
+
+(ert-deftest agent-shell-markdown-local-links-have-no-terminal-url ()
+  (let ((file (make-temp-file "agent-shell-local-link")))
+    (unwind-protect
+        (let ((default-directory (file-name-directory file)))
+          (dolist (url (list file (concat "file://" file)
+                             (concat file ":1")
+                             (concat (file-name-nondirectory file) ":1")))
+            (with-temp-buffer
+              (insert (format "[local](%s)" url))
+              (agent-shell-markdown-replace-markup)
+              (should (equal (agent-shell-markdown-link-url-at-point (point-min)) url))
+              (should-not (get-text-property (point-min) 'browse-url-data)))))
+      (delete-file file))))
+
 (ert-deftest agent-shell-markdown-hint-stops-at-end-of-what-it-describes ()
   "A hint answers on its own text and not on the character after it.
 
@@ -1108,6 +1149,7 @@ for anything."
           (agent-shell-markdown-replace-markup)
           (should (equal (format "%s:1-4" file)
                          (agent-shell-markdown-link-url-at-point 5)))
+          (should-not (get-text-property 5 'browse-url-data))
           ;; Redone, not composed with itself.
           (should (equal 'agent-shell-markdown-link (get-text-property 5 'face))))
       (delete-file file))))
@@ -1127,6 +1169,8 @@ for anything."
     (agent-shell-markdown-replace-markup)
     (should (equal "https://example.com/foo/bar"
                    (agent-shell-markdown-link-url-at-point 5)))
+    (should (equal "https://example.com/foo/bar"
+                   (get-text-property 5 'browse-url-data)))
     ;; The whole URL is faced, and faced once.
     (should (equal 'agent-shell-markdown-link (get-text-property 5 'face)))
     (should (equal 'agent-shell-markdown-link (get-text-property 30 'face)))
