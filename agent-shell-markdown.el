@@ -985,6 +985,15 @@ browser\", and hovering shows \"Open in browser\"."
     ;; A hand pointer when over is enough. No need for `mouse-face'.
     (put-text-property start end 'pointer 'hand)
     (put-text-property start end 'agent-shell-markdown-url url)
+    ;; `browse-url-data' is where Emacs keeps a URL on text (see
+    ;; `browse-url-button-open' and `ansi-osc-hyperlink-handler').
+    ;; Nothing here reads it, as agent-shell keymap handles RET and clicks,
+    ;; but a terminal Emacs that emits OSC 8 hyperlinks from it lets
+    ;; the terminal open web links on its own machine, which matters
+    ;; when Emacs runs remotely (for example over SSH), where
+    ;; `browse-url' would open them on the remote host.  Only web
+    ;; URLs are tagged, with a bare `www.' host given a scheme so it
+    ;; opens as such.
     (let ((case-fold-search t))
       (put-text-property
        start end 'browse-url-data
