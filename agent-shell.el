@@ -5618,9 +5618,10 @@ returns 1482."
 
 Sums each tspan's text width and the `dx' gap preceding it.
 
-Exact rather than estimated: the header SVG names the same font family
-and pixel size Emacs is using, so `string-pixel-width' measures what
-librsvg will draw.
+An estimate: the header SVG names the same font family and pixel size
+Emacs is using, but glyphs missing from that font (like \"➤\") fall back
+to whichever font each of Emacs and librsvg picks, and those can differ
+in width.  See `agent-shell--svg-content-width' for the slack added.
 
 For example, with \"Claude\" measuring 60 pixels and \"➤\" 15:
 
@@ -5642,13 +5643,20 @@ For example, with \"Claude\" measuring 60 pixels and \"➤\" 15:
   "Return the pixel width SVG's text rows reach.
 
 The widest row wins, each measured from its own `x' offset, so the result
-is where the rightmost drawn text ends.
+is where the rightmost drawn text ends, plus slack.
 
-For example, an SVG whose top row starts at x 79 and measures 634, and
-whose bottom row starts at x 79 and measures 168, returns 713."
+Each tspan adds a `frame-char-width' of slack, since librsvg may render
+fallback glyphs wider than `string-pixel-width' measured them, and that
+error builds up along a row.
+
+For example, with a 10 pixel `frame-char-width', an SVG whose top row
+starts at x 79, measures 634 and has 7 tspans, and whose bottom row
+starts at x 79, measures 168 and has 3 tspans, returns 783."
   (seq-reduce (lambda (widest node)
                 (max widest (+ (string-to-number (format "%s" (dom-attr node 'x)))
-                               (agent-shell--svg-text-width node))))
+                               (agent-shell--svg-text-width node)
+                               (* (frame-char-width)
+                                  (length (dom-by-tag node 'tspan))))))
               (dom-by-tag svg 'text)
               0))
 
