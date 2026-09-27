@@ -70,21 +70,24 @@ overridden the next time a shell starts."
   :type 'boolean
   :group 'agent-shell)
 
+(defvar agent-shell-chat-busy-frames
+  ["|" "/" "-" "\\"]
+  "Frames animating the live prompt's marker while the agent works.
+A vector or list of strings, each a single column, drawn in the body
+indent ahead of the marker.  For example, [\"·\" \"•\" \"●\" \"•\"].
+
+ASCII by default, so the buffer's own font draws them.  Anything a font
+may lack comes from a fallback font instead, which can draw it wider
+than a column or with a taller line, bouncing the prompt as frames
+change.  Braille, the usual spinner, is one such (and may show unraised
+dots).")
+
 ;;; Constants
 
 (defconst agent-shell-chat--prompt "❯ "
   "Prompt marker shown on the live shell prompt while it awaits input.
 Cleared the instant the prompt is submitted, since the overlay then
 renders the submitted turn instead.")
-
-(defconst agent-shell-chat--busy-frames
-  ["|" "/" "-" "\\"]
-  "Frames animating the live prompt's marker while the agent works.
-Each is a single column, drawn in the body indent ahead of the marker.
-ASCII, so the buffer's own font draws them.  Anything a font may lack
-comes from a fallback font instead, which can draw it wider than a
-column or with a taller line, bouncing the prompt as frames change.
-Braille, the usual spinner, is one such (and may show unraised dots).")
 
 (defconst agent-shell-chat--body-indent "  "
   "Indent that lines the prompt input up with the response body.
@@ -141,8 +144,8 @@ For example, on the heartbeat's third beat returns \"-\"."
   (when-let* (((bound-and-true-p agent-shell-show-busy-indicator))
               (heartbeat (map-elt agent-shell--state :heartbeat))
               ((eq (map-elt heartbeat :status) 'busy)))
-    (aref agent-shell-chat--busy-frames
-          (mod (map-elt heartbeat :value) (length agent-shell-chat--busy-frames)))))
+    (seq-elt agent-shell-chat-busy-frames
+             (mod (map-elt heartbeat :value) (seq-length agent-shell-chat-busy-frames)))))
 
 (defun agent-shell-chat--live-marker ()
   "Return the live prompt's marker, animated while the agent works.

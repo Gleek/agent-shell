@@ -869,11 +869,11 @@ so it does not vanish mid-type when a relabel runs."
 
 (defun agent-shell-chat-mode-tests--busy-marker (beat)
   "Return the live marker as drawn on BEAT while busy.
-Read from `agent-shell-chat--busy-frames', so the frames can change
+Read from `agent-shell-chat-busy-frames', so the frames can change
 without these tests.
 
 For example, on beat 1 returns \"/ ❯ \"."
-  (concat (aref agent-shell-chat--busy-frames beat) " " agent-shell-chat--prompt))
+  (concat (seq-elt agent-shell-chat-busy-frames beat) " " agent-shell-chat--prompt))
 
 (ert-deftest agent-shell-chat-live-marker-animates-while-busy-test ()
   "A busy agent animates the live prompt's marker, a frame per beat.
@@ -927,6 +927,14 @@ would otherwise push the marker right."
       (agent-shell-chat-mode-tests--beat 'busy 0)
       (should (equal (get-text-property 1 'display (agent-shell-chat--live-marker))
                      '(space :align-to (2 . width)))))))
+
+(ert-deftest agent-shell-chat-busy-frames-accepts-list-test ()
+  "Busy frames can be set as a list as well as a vector."
+  (agent-shell-chat-mode-tests--with-shell
+    (let ((agent-shell-show-busy-indicator t)
+          (agent-shell-chat-busy-frames '("a" "b" "c")))
+      (agent-shell-chat-mode-tests--beat 'busy 4)
+      (should (equal (agent-shell-chat--busy-frame) "b")))))
 
 (ert-deftest agent-shell-chat-live-marker-frame-faced-secondary-test ()
   "A busy frame is faced `agent-shell-secondary', the marker `default'.
