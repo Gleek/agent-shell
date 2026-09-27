@@ -51,9 +51,10 @@ a handler to report.
 
 Every file is checked before any is copied, so a drop that includes an
 unreadable file or a directory attaches nothing rather than part of the
-selection.  A drop made while the shell is mid-turn is queued, the way
-`agent-shell-send-region' queues its region, whether it lands on the
-shell or on a viewport buffer.
+selection.  A drop made mid-turn attaches to the live prompt when
+`agent-shell-persistent-prompt-enabled' keeps one there.  Without one, it
+is queued the way `agent-shell-send-region' queues its region, whether it
+lands on the shell or on a viewport buffer.
 
 For example, dropping \"file:///tmp/diagram.png\" and
 \"file:///tmp/notes.txt\" together inserts \"@/tmp/diagram.png\" with
@@ -70,7 +71,9 @@ an image preview and \"@/tmp/notes.txt\"."
                                    (agent-shell--dnd-keep-file file agent-cwd))
                                  files))
                 :agent-cwd agent-cwd)))
-    (if (with-current-buffer shell-buffer (shell-maker-busy))
+    (if (with-current-buffer shell-buffer
+          (and (shell-maker-busy)
+               (not (agent-shell--prompt-input-start))))
         (with-current-buffer shell-buffer
           (agent-shell-prompt-queue
            (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))

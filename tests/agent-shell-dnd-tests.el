@@ -128,6 +128,33 @@ on a viewport buffer queues too."
                                    "\n\n")))))
       (delete-file file))))
 
+(ert-deftest agent-shell--dnd-handle-file-url-busy-live-prompt-attaches-test ()
+  "A drop mid-turn attaches to the live prompt when there is one.
+Only a busy shell with nowhere to type falls back to the queue."
+  (let ((file (make-temp-file "agent-shell-dnd" nil ".txt" "dropped"))
+        (inserted nil)
+        (queued nil))
+    (unwind-protect
+        (with-temp-buffer
+          (cl-letf (((symbol-function 'agent-shell-insert)
+                     (lambda (&rest args)
+                       (setq inserted (plist-get args :text))))
+                    ((symbol-function 'agent-shell--shell-buffer)
+                     (lambda (&rest _) (current-buffer)))
+                    ((symbol-function 'shell-maker-busy) (lambda () t))
+                    ((symbol-function 'agent-shell--prompt-input-start)
+                     (lambda () (point-max)))
+                    ((symbol-function 'agent-shell-prompt-queue)
+                     (lambda (prompt) (setq queued prompt))))
+            (let ((temporary-file-directory agent-shell-dnd-test--no-temp-dir))
+              (agent-shell--dnd-handle-file-url (concat "file://" file) 'copy))
+            (should-not queued)
+            (should (equal inserted
+                           (agent-shell--get-files-context
+                            :files (list file)
+                            :agent-cwd (agent-shell-cwd))))))
+      (delete-file file))))
+
 (ert-deftest agent-shell--dnd-handle-file-url-copies-transient-file-test ()
   "A drop from the temp directory attaches the copy, not the vanishing original."
   (let ((file (make-temp-file "agent-shell-dnd" nil ".png" "pixels"))

@@ -9948,7 +9948,9 @@ When PICK-SHELL is non-nil, prompt for which shell buffer to use."
                 :deactivate t
                 :agent-cwd (with-current-buffer shell-buffer
                              (agent-shell-cwd)))))
-    (if (with-current-buffer shell-buffer (shell-maker-busy))
+    (if (with-current-buffer shell-buffer
+          (and (shell-maker-busy)
+               (not (agent-shell--prompt-input-start))))
         (with-current-buffer shell-buffer
           (agent-shell-prompt-queue
            (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))
@@ -9977,7 +9979,9 @@ With \\[universal-argument] \\[universal-argument] prefix ARG, prompt to pick an
    (t
     (let* ((shell-buffer (agent-shell--shell-buffer))
            (text (agent-shell--context :shell-buffer shell-buffer)))
-      (if (with-current-buffer shell-buffer (shell-maker-busy))
+      (if (with-current-buffer shell-buffer
+            (and (shell-maker-busy)
+                 (not (agent-shell--prompt-input-start))))
           (with-current-buffer shell-buffer
             (agent-shell-prompt-queue
              (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))

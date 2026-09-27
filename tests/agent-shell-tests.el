@@ -6475,6 +6475,47 @@ prompt."
             :busy t)
            '(:asked-minibuffer nil :quoted-at-prompt t :ends-after-quote t))))
 
+(ert-deftest agent-shell-send-region-inserts-into-live-prompt-test ()
+  "Sending a region mid-turn goes to the prompt, not the minibuffer.
+
+Like quoting, a prompt live for the whole turn is somewhere to insert
+into, so busy state alone no longer sends the region to the queue."
+  (should (equal
+           (agent-shell-tests--with-persistent-prompt-shell
+            (lambda ()
+              (let (asked-minibuffer)
+                (cl-letf (((symbol-function 'agent-shell--prompt-queue-read)
+                           (lambda (&rest _) (setq asked-minibuffer t) ""))
+                          ((symbol-function 'agent-shell--shell-buffer)
+                           (lambda (&rest _) (current-buffer)))
+                          ((symbol-function 'agent-shell--get-region-context)
+                           (lambda (&rest _) "picked lines"))
+                          ((symbol-function 'agent-shell--display-buffer) #'ignore))
+                  (agent-shell-send-region))
+                (list :asked-minibuffer asked-minibuffer
+                      :prompt-input (agent-shell--prompt-input))))
+            :busy t)
+           '(:asked-minibuffer nil :prompt-input "picked lines"))))
+
+(ert-deftest agent-shell-send-dwim-inserts-into-live-prompt-test ()
+  "Sending context mid-turn goes to the prompt, not the minibuffer."
+  (should (equal
+           (agent-shell-tests--with-persistent-prompt-shell
+            (lambda ()
+              (let (asked-minibuffer)
+                (cl-letf (((symbol-function 'agent-shell--prompt-queue-read)
+                           (lambda (&rest _) (setq asked-minibuffer t) ""))
+                          ((symbol-function 'agent-shell--shell-buffer)
+                           (lambda (&rest _) (current-buffer)))
+                          ((symbol-function 'agent-shell--context)
+                           (lambda (&rest _) "context from source"))
+                          ((symbol-function 'agent-shell--display-buffer) #'ignore))
+                  (agent-shell-send-dwim))
+                (list :asked-minibuffer asked-minibuffer
+                      :prompt-input (agent-shell--prompt-input))))
+            :busy t)
+           '(:asked-minibuffer nil :prompt-input "context from source"))))
+
 (ert-deftest agent-shell-submit-leaves-refused-input-untouched-test ()
   "A refused prompt leaves what was typed exactly as it was.
 
