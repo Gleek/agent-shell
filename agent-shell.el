@@ -11139,11 +11139,14 @@ start of the COUNTth-from-last navigatable block to `point-max'."
 If point is at the last prompt, behave as regular editing (typing
 the originating key) so the user can type `r' as plain input.
 
-Otherwise, when a region is active, wrap it as a Markdown block quote.
-If the shell is not busy, insert the quote at the latest prompt with
-point left below it, ready to type.  If the shell is busy, read a
-follow-up prompt in the minibuffer prefilled with the block quote
-and queue it via `agent-shell-prompt-queue'."
+Otherwise, when a region is active, wrap it as a Markdown block quote
+and insert it at the live prompt, point left below it, ready to type.
+Busy or not makes no difference: with
+`agent-shell-persistent-prompt-enabled' there is a prompt to quote into
+for the whole turn.
+
+Falls back to reading a follow-up prompt in the minibuffer, prefilled
+with the block quote, when there is no prompt to insert into."
   (declare (modes agent-shell-mode))
   (interactive)
   (unless (derived-mode-p 'agent-shell-mode)
@@ -11158,7 +11161,7 @@ and queue it via `agent-shell-prompt-queue'."
     (let ((quoted (agent-shell--block-quote
                    (string-trim
                     (map-elt (agent-shell--get-region :deactivate t) :content)))))
-      (if (shell-maker-busy)
+      (if (not (agent-shell--prompt-input-start))
           (agent-shell-prompt-queue
            (agent-shell--prompt-queue-read :initial (concat "\n\n" quoted "\n\n")))
         (goto-char (point-max))

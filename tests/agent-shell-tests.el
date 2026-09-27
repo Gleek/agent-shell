@@ -6451,6 +6451,30 @@ prompt the user was typing into while the agent started."
         (should-error (agent-shell-interrupt t) :type 'user-error)
         (should-not shut-down)))))
 
+(ert-deftest agent-shell-quote-region-quotes-into-live-prompt-test ()
+  "Quoting a region mid-turn goes to the prompt, not the minibuffer.
+
+With a prompt live for the whole turn there is somewhere to quote into,
+so busy state stops deciding between inserting and reading a follow-up
+prompt."
+  (should (equal
+           (agent-shell-tests--with-persistent-prompt-shell
+            (lambda ()
+              (let (asked-minibuffer)
+                (cl-letf (((symbol-function 'agent-shell--prompt-queue-read)
+                           (lambda (&rest _) (setq asked-minibuffer t) ""))
+                          ((symbol-function 'agent-shell--get-region)
+                           (lambda (&rest _) '((:content . "picked lines"))))
+                          ((symbol-function 'agent-shell--typing-at-prompt-p) #'ignore)
+                          ((symbol-function 'shell-maker-point-at-last-prompt-p) #'ignore)
+                          ((symbol-function 'region-active-p) (lambda () t)))
+                  (agent-shell-quote-region))
+                (list :asked-minibuffer asked-minibuffer
+                      :quoted-at-prompt (and (string-match-p "> picked lines" (buffer-string)) t)
+                      :ends-after-quote (= (point) (point-max)))))
+            :busy t)
+           '(:asked-minibuffer nil :quoted-at-prompt t :ends-after-quote t))))
+
 (ert-deftest agent-shell-submit-leaves-refused-input-untouched-test ()
   "A refused prompt leaves what was typed exactly as it was.
 
