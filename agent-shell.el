@@ -9948,13 +9948,11 @@ When PICK-SHELL is non-nil, prompt for which shell buffer to use."
                 :deactivate t
                 :agent-cwd (with-current-buffer shell-buffer
                              (agent-shell-cwd)))))
-    (if (with-current-buffer shell-buffer
-          (and (shell-maker-busy)
-               (not (agent-shell--prompt-input-start))))
-        (with-current-buffer shell-buffer
-          (agent-shell-prompt-queue
-           (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))
-      (agent-shell-insert :text text :shell-buffer shell-buffer))))
+    (if (agent-shell--can-insert-into-prompt-p :shell-buffer shell-buffer)
+        (agent-shell-insert :text text :shell-buffer shell-buffer)
+      (with-current-buffer shell-buffer
+        (agent-shell-prompt-queue
+         (agent-shell--prompt-queue-read :initial (concat text "\n\n")))))))
 
 (defun agent-shell-send-region-to ()
   "Like `agent-shell-send-region' but prompt for which shell to use."
@@ -9979,13 +9977,11 @@ With \\[universal-argument] \\[universal-argument] prefix ARG, prompt to pick an
    (t
     (let* ((shell-buffer (agent-shell--shell-buffer))
            (text (agent-shell--context :shell-buffer shell-buffer)))
-      (if (with-current-buffer shell-buffer
-            (and (shell-maker-busy)
-                 (not (agent-shell--prompt-input-start))))
-          (with-current-buffer shell-buffer
-            (agent-shell-prompt-queue
-             (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))
-        (agent-shell-insert :text text :shell-buffer shell-buffer))))))
+      (if (agent-shell--can-insert-into-prompt-p :shell-buffer shell-buffer)
+          (agent-shell-insert :text text :shell-buffer shell-buffer)
+        (with-current-buffer shell-buffer
+          (agent-shell-prompt-queue
+           (agent-shell--prompt-queue-read :initial (concat text "\n\n")))))))))
 
 (cl-defun agent-shell--get-region-context (&key deactivate no-error agent-cwd)
   "Get region as insertable text, ready for sending to agent.
@@ -11166,11 +11162,13 @@ with the block quote, when there is no prompt to insert into."
     (let ((quoted (agent-shell--block-quote
                    (string-trim
                     (map-elt (agent-shell--get-region :deactivate t) :content)))))
-      (if (not (agent-shell--prompt-input-start))
+      (if (not (agent-shell--can-insert-into-prompt-p))
           (agent-shell-prompt-queue
            (agent-shell--prompt-queue-read :initial (concat "\n\n" quoted "\n\n")))
-        (goto-char (point-max))
-        (insert "\n\n" quoted "\n\n"))))
+        (agent-shell-insert :text (concat quoted "\n\n")
+                            :shell-buffer (current-buffer)
+                            :no-focus t)
+        (goto-char (point-max)))))
    ;; Otherwise: fall back to self-insert.
    (t
     (self-insert-command 1))))

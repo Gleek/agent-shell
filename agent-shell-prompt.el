@@ -169,6 +169,25 @@ typed text after it (see `agent-shell--live-input-prompt-p')."
               ((agent-shell--live-input-prompt-p prompt)))
     (marker-position (cdr prompt))))
 
+(cl-defun agent-shell--can-insert-into-prompt-p (&key shell-buffer)
+  "Return non-nil when text can go into SHELL-BUFFER's prompt.
+
+SHELL-BUFFER defaults to the current buffer.
+
+That is, now or once the prompt is ready: an idle shell always
+qualifies, since `agent-shell-insert' holds text until `prompt-ready'.
+A busy shell qualifies only while `agent-shell-persistent-prompt-enabled'
+keeps a live prompt there.  Callers fall back to queueing otherwise.
+
+For example:
+
+  idle                          => t
+  busy, persistent prompt live  => t
+  busy, no live prompt          => nil"
+  (with-current-buffer (or shell-buffer (current-buffer))
+    (or (not (shell-maker-busy))
+        (agent-shell--prompt-input-start))))
+
 (defun agent-shell--prompt-input ()
   "Return the text typed at the live prompt, trimmed, or nil when empty.
 

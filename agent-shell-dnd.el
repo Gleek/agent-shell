@@ -37,7 +37,6 @@
 (declare-function agent-shell--get-files-context "agent-shell")
 (declare-function agent-shell--shell-buffer "agent-shell")
 (declare-function agent-shell-insert "agent-shell")
-(declare-function shell-maker-busy "shell-maker")
 
 (defun agent-shell--dnd-handle-file-url (urls _action)
   "Attach the local files behind dropped URLS as file context.
@@ -71,13 +70,11 @@ an image preview and \"@/tmp/notes.txt\"."
                                    (agent-shell--dnd-keep-file file agent-cwd))
                                  files))
                 :agent-cwd agent-cwd)))
-    (if (with-current-buffer shell-buffer
-          (and (shell-maker-busy)
-               (not (agent-shell--prompt-input-start))))
-        (with-current-buffer shell-buffer
-          (agent-shell-prompt-queue
-           (agent-shell--prompt-queue-read :initial (concat text "\n\n"))))
-      (agent-shell-insert :text text :shell-buffer shell-buffer))
+    (if (agent-shell--can-insert-into-prompt-p :shell-buffer shell-buffer)
+        (agent-shell-insert :text text :shell-buffer shell-buffer)
+      (with-current-buffer shell-buffer
+        (agent-shell-prompt-queue
+         (agent-shell--prompt-queue-read :initial (concat text "\n\n")))))
     'private))
 
 ;; Emacs 30+ reads the dnd-multiple-handler property off the handler's

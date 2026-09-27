@@ -6475,6 +6475,19 @@ prompt."
             :busy t)
            '(:asked-minibuffer nil :quoted-at-prompt t :ends-after-quote t))))
 
+(ert-deftest agent-shell--can-insert-into-prompt-p-test ()
+  "Text can go into the prompt unless the shell is busy with none live."
+  (should (agent-shell-tests--with-persistent-prompt-shell
+           #'agent-shell--can-insert-into-prompt-p))
+  (should (agent-shell-tests--with-persistent-prompt-shell
+           #'agent-shell--can-insert-into-prompt-p
+           :busy t))
+  (with-temp-buffer
+    (cl-letf (((symbol-function 'shell-maker-busy) (lambda (&rest _) t)))
+      (should-not (agent-shell--can-insert-into-prompt-p))
+      (should-not (agent-shell--can-insert-into-prompt-p
+                   :shell-buffer (current-buffer))))))
+
 (ert-deftest agent-shell-send-region-inserts-into-live-prompt-test ()
   "Sending a region mid-turn goes to the prompt, not the minibuffer.
 
@@ -6515,6 +6528,32 @@ into, so busy state alone no longer sends the region to the queue."
                       :prompt-input (agent-shell--prompt-input))))
             :busy t)
            '(:asked-minibuffer nil :prompt-input "context from source"))))
+
+(ert-deftest agent-shell-quote-region-waits-for-prompt-test ()
+  "Quoting before the first prompt waits for it, like other inserts.
+
+An idle shell still starting has no prompt yet.  The quote is held until
+`prompt-ready' rather than read into the minibuffer or inserted wherever
+the buffer ends."
+  (with-temp-buffer
+    (setq major-mode 'agent-shell-mode)
+    (setq-local agent-shell-session-strategy 'new)
+    (setq-local agent-shell--state (agent-shell--make-state :buffer (current-buffer)))
+    (let (asked-minibuffer subscribed-to)
+      (cl-letf (((symbol-function 'agent-shell--prompt-queue-read)
+                 (lambda (&rest _) (setq asked-minibuffer t) ""))
+                ((symbol-function 'agent-shell-subscribe-to)
+                 (lambda (&rest args) (setq subscribed-to (plist-get args :event))))
+                ((symbol-function 'agent-shell--get-region)
+                 (lambda (&rest _) '((:content . "picked lines"))))
+                ((symbol-function 'agent-shell--typing-at-prompt-p) #'ignore)
+                ((symbol-function 'shell-maker-point-at-last-prompt-p) #'ignore)
+                ((symbol-function 'shell-maker-busy) #'ignore)
+                ((symbol-function 'region-active-p) (lambda () t)))
+        (agent-shell-quote-region))
+      (should-not asked-minibuffer)
+      (should (eq subscribed-to 'prompt-ready))
+      (should (string-empty-p (buffer-string))))))
 
 (ert-deftest agent-shell-submit-leaves-refused-input-untouched-test ()
   "A refused prompt leaves what was typed exactly as it was.
