@@ -4812,7 +4812,9 @@ variable (see makunbound)"))
                                                               (get-buffer-window shell-buffer t))
                                                       (with-current-buffer shell-buffer
                                                         (agent-shell--update-header-and-mode-line
-                                                         :cache-enabled (eq status 'busy))))
+                                                         :cache-enabled (eq status 'busy))
+                                                        (when agent-shell-chat-mode
+                                                          (agent-shell-chat--animate-live-marker))))
                                                     ;; 'ended is the final tick; render even
                                                     ;; if off-screen to ensure animation is hidden.
                                                     (when-let* ((viewport-buffer (agent-shell-viewport--buffer
