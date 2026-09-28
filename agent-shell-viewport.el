@@ -1654,6 +1654,7 @@ For example, offer to kill associated shell session."
     (agent-shell-completion-mode +1))
   (agent-shell-list-edit-mode +1)
   (agent-shell--enable-dnd)
+  (yank-media-handler "image/.*" #'agent-shell--yank-media-image)
   (agent-shell-viewport--update-header)
   (let ((inhibit-read-only t))
     (erase-buffer))
@@ -1668,6 +1669,7 @@ For example, offer to kill associated shell session."
   (add-hook 'agent-shell-ui-post-expand-fragment-at-point-hook
             #'agent-shell--render-markdown nil t)
   (agent-shell--enable-dnd)
+  (yank-media-handler "image/.*" #'agent-shell--yank-media-image)
   (agent-shell-viewport--update-header)
   (setq-local filter-buffer-substring-function #'agent-shell--filter-buffer-substring)
   (setq buffer-read-only t)

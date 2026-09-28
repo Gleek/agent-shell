@@ -20,7 +20,8 @@
 
 ;;; Commentary:
 ;;
-;; Attaches files dropped on shell and viewport buffers to the prompt.
+;; Attaches files dropped on shell and viewport buffers to the prompt,
+;; and images yanked into them with `yank-media'.
 ;;
 ;; Report issues at https://github.com/xenodium/agent-shell/issues
 ;;
@@ -141,6 +142,48 @@ add a second set of entries."
                                   (cons pattern #'agent-shell--dnd-handle-file-url))
                                 '("^file:///" "^file:/[^/]" "^file:[^/]"))
                         dnd-protocol-alist))))
+
+(defun agent-shell--yank-media-image (type data)
+  "Attach clipboard image DATA of MIME TYPE to the prompt.
+
+A `yank-media' handler: Emacs reads the image off the clipboard itself,
+so no external utility from `agent-shell-clipboard-image-handlers' is
+needed.  DATA is saved to the screenshots directory and inserted as file
+context, or queued when the shell is busy with no live prompt, the way
+`agent-shell--dnd-handle-file-url' attaches a dropped file.
+
+For example, yanking an image/png inserts
+\"@.agent-shell/screenshots/clipboard-20260928-101512-Ab3xK9.png\" with
+an image preview."
+  (let* ((shell-buffer (agent-shell--shell-buffer))
+         (text (agent-shell--get-files-context
+                :files (with-current-buffer shell-buffer
+                         (let ((coding-system-for-write 'no-conversion))
+                           (list (make-temp-file
+                                  (expand-file-name (format-time-string "clipboard-%Y%m%d-%H%M%S-")
+                                                    (agent-shell--dot-subdir "screenshots"))
+                                  nil
+                                  (concat "." (agent-shell--yank-media-image-extension type))
+                                  data))))
+                :agent-cwd (with-current-buffer shell-buffer
+                             (agent-shell-cwd)))))
+    (if (agent-shell--can-insert-into-prompt-p :shell-buffer shell-buffer)
+        (agent-shell-insert :text text :shell-buffer shell-buffer)
+      (with-current-buffer shell-buffer
+        (agent-shell-prompt-queue
+         (agent-shell--prompt-queue-read :initial (concat text "\n\n")))))))
+
+(defun agent-shell--yank-media-image-extension (type)
+  "Return the file extension for image MIME TYPE, without the dot.
+
+For example:
+
+  image/png     => \"png\"
+  image/svg+xml => \"svg\""
+  (let ((subtype (cadr (split-string (symbol-name type) "/"))))
+    (if (equal subtype "svg+xml")
+        "svg"
+      subtype)))
 
 (provide 'agent-shell-dnd)
 

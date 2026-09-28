@@ -4845,6 +4845,7 @@ variable (see makunbound)"))
       (when agent-shell-file-completion-enabled
         (agent-shell-completion-mode +1))
       (agent-shell--enable-dnd)
+      (yank-media-handler "image/.*" #'agent-shell--yank-media-image)
       (agent-shell--setup-modeline)
       (setq-local agent-shell--transcript-file (agent-shell--transcript-file-path))
       ;; We disabled aliasing comint/shell-maker commands

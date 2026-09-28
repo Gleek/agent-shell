@@ -947,6 +947,8 @@ You can send a screenshot from your clipboard to your shell with =agent-shell-se
 - =pngpaste= for MacOS.
 - =powershell= for Windows.
 
+Alternatively, =M-x yank-media= pastes a clipboard image with no external programs, where your Emacs build can read images off the clipboard.
+
 *** Dragging files in
 
 Drag a file from your file manager (or =dired=) onto a shell or viewport buffer to attach it to the prompt, the same way a pasted image is. Images get a preview; any other file is attached as an =@path= link.
