@@ -6555,6 +6555,80 @@ the buffer ends."
       (should (eq subscribed-to 'prompt-ready))
       (should (string-empty-p (buffer-string))))))
 
+(ert-deftest agent-shell-insert-shell-command-output-into-live-prompt-test ()
+  "Command output finishing mid-turn goes to the prompt, not the minibuffer.
+
+Only the inserted code block is rendered, so the turn above the prompt
+is left as it was."
+  (agent-shell-tests--with-persistent-prompt-shell
+   (lambda ()
+     (let ((shell-buffer (current-buffer))
+           (transcript (buffer-substring-no-properties
+                        (point-min) (agent-shell--prompt-input-start)))
+           (asked-minibuffer nil))
+       (cl-letf (((symbol-function 'agent-shell--prompt-queue-read)
+                  (lambda (&rest _) (setq asked-minibuffer t) ""))
+                 ((symbol-function 'read-string) (lambda (&rest _) "echo hello"))
+                 ((symbol-function 'agent-shell--current-shell)
+                  (lambda (&rest _) shell-buffer))
+                 ((symbol-function 'agent-shell--build-command-for-execution)
+                  #'identity)
+                 ((symbol-function 'agent-shell--display-buffer) #'ignore))
+         (agent-shell-insert-shell-command-output)
+         (with-timeout (5 (ert-fail "Command output never arrived"))
+           (while (not (agent-shell--prompt-input))
+             (accept-process-output nil 0.05))))
+       (should-not asked-minibuffer)
+       (should (string-match-p "hello" (agent-shell--prompt-input)))
+       (should (equal (buffer-substring-no-properties
+                       (point-min) (agent-shell--prompt-input-start))
+                      transcript))))
+   :busy t))
+
+(ert-deftest agent-shell-insert-shell-command-output-into-viewport-test ()
+  "Command output run from a viewport is appended to its compose buffer.
+
+The viewport switches itself to edit mode, so this works from view mode
+too, where the buffer is read-only."
+  (let ((viewport-buffer (generate-new-buffer " *agent-shell-viewport-test*"))
+        (appended nil))
+    (unwind-protect
+        (with-current-buffer viewport-buffer
+          (setq major-mode 'agent-shell-viewport-view-mode)
+          (setq buffer-read-only t)
+          (cl-letf (((symbol-function 'read-string) (lambda (&rest _) "echo hello"))
+                    ((symbol-function 'agent-shell--current-shell)
+                     (lambda (&rest _) viewport-buffer))
+                    ((symbol-function 'agent-shell-viewport--buffer)
+                     (lambda (&rest _) viewport-buffer))
+                    ((symbol-function 'agent-shell--can-insert-into-prompt-p)
+                     (lambda (&rest _) t))
+                    ((symbol-function 'agent-shell--build-command-for-execution)
+                     #'identity)
+                    ((symbol-function 'agent-shell--display-buffer) #'ignore)
+                    ((symbol-function 'agent-shell-viewport--show-buffer)
+                     (lambda (&rest args)
+                       (setq appended (plist-get args :append))
+                       nil)))
+            (agent-shell-insert-shell-command-output)
+            (with-timeout (5 (ert-fail "Command output never arrived"))
+              (while (not appended)
+                (accept-process-output nil 0.05))))
+          (should (string-match-p "```shell\n\\$ echo hello\n\nhello" appended))
+          (should (string-empty-p (buffer-string))))
+      (kill-buffer viewport-buffer))))
+
+(ert-deftest agent-shell--insert-to-shell-buffer-deferred-returns-nil-test ()
+  "Text held until `prompt-ready' reports no insertion details yet."
+  (with-temp-buffer
+    (setq major-mode 'agent-shell-mode)
+    (setq-local agent-shell-session-strategy 'new)
+    (setq-local agent-shell--state (agent-shell--make-state :buffer (current-buffer)))
+    (should-not (agent-shell--insert-to-shell-buffer :text "later"
+                                                     :shell-buffer (current-buffer)
+                                                     :no-focus t))
+    (should (string-empty-p (buffer-string)))))
+
 (ert-deftest agent-shell-submit-leaves-refused-input-untouched-test ()
   "A refused prompt leaves what was typed exactly as it was.
 

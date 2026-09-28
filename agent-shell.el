@@ -8947,7 +8947,8 @@ than editable user input."
   "Execute a shell command and insert output as a code block.
 
 The command executes asynchronously.  When finished, the output is
-inserted into the shell buffer prompt."
+inserted into the prompt of the buffer it ran from, shell or viewport.
+If the shell is busy with no live prompt, it is queued instead."
   (declare (modes agent-shell-mode
                   agent-shell-viewport-view-mode
                   agent-shell-viewport-edit-mode))
@@ -8999,16 +9000,19 @@ inserted into the shell buffer prompt."
 %s
 ```" (with-current-buffer output-buffer
        (buffer-string)))))
-                      (if (with-current-buffer shell-buffer (shell-maker-busy))
-                          (with-current-buffer shell-buffer
-                            (agent-shell-prompt-queue
-                             (agent-shell--prompt-queue-read
-                              :initial (concat code-block "\n\n"))))
-                        (with-current-buffer destination-buffer
-                          (save-excursion
-                            (goto-char (point-max))
-                            (insert "\n\n" code-block))
-                          (agent-shell--render-markdown))))
+                      (if (agent-shell--can-insert-into-prompt-p :shell-buffer shell-buffer)
+                          (when-let* ((inserted (with-current-buffer destination-buffer
+                                                  (agent-shell-insert :text code-block
+                                                                      :shell-buffer shell-buffer))))
+                            (with-current-buffer (map-elt inserted :buffer)
+                              (save-restriction
+                                (narrow-to-region (map-elt inserted :start)
+                                                  (map-elt inserted :end))
+                                (agent-shell--render-markdown))))
+                        (with-current-buffer shell-buffer
+                          (agent-shell-prompt-queue
+                           (agent-shell--prompt-queue-read
+                            :initial (concat code-block "\n\n"))))))
                     (when (buffer-live-p output-buffer)
                       (kill-buffer output-buffer)))))))
     (set-process-query-on-exit-flag proc nil)
@@ -9905,7 +9909,8 @@ Returns an alist with insertion details or nil otherwise:
                            (agent-shell-unsubscribe :subscription token)
                            (agent-shell--insert-to-shell-buffer
                             :text text :submit submit
-                            :no-focus no-focus :shell-buffer shell-buffer))))))))
+                            :no-focus no-focus :shell-buffer shell-buffer))))
+        nil))))
 
 (cl-defun agent-shell-insert (&key text submit no-focus shell-buffer)
   "Insert TEXT into the agent shell at `point-max'.
