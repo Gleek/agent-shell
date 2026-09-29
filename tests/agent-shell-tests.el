@@ -3949,6 +3949,22 @@ other unknown ones."
       (should-error (agent-shell-copy-session-id)
                     :type 'user-error))))
 
+(ert-deftest agent-shell-last-activity-time-test ()
+  "Test `agent-shell-last-activity-time' reads current or given buffer."
+  (let ((time (encode-time '(0 0 12 29 9 2026 nil -1 t))))
+    (with-temp-buffer
+      (setq-local agent-shell--state
+                  `((:last-activity-time . ,time)))
+      (let ((shell-buffer (current-buffer)))
+        (should (equal (agent-shell-last-activity-time) time))
+        (with-temp-buffer
+          (setq-local agent-shell--state
+                      '((:last-activity-time . nil)))
+          (should-not (agent-shell-last-activity-time))
+          (should (equal (agent-shell-last-activity-time
+                          :shell-buffer shell-buffer)
+                         time)))))))
+
 (ert-deftest agent-shell--make-header-model-includes-session-id-test ()
   "Test `agent-shell--make-header-model' includes :session-id field."
   (with-temp-buffer

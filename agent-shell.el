@@ -2033,6 +2033,25 @@ Example:
   (with-current-buffer (or shell-buffer (current-buffer))
     (map-nested-elt agent-shell--state '(:session :id))))
 
+(cl-defun agent-shell-last-activity-time (&key shell-buffer)
+  "Return the time of the latest shell activity, or nil if none yet.
+
+Activity is either a submitted prompt or an incoming agent notification.
+The time is a Lisp timestamp, as returned by `current-time'.
+
+When SHELL-BUFFER is non-nil, read that buffer instead of the current one.
+
+A stable public API for packages that integrate with `agent-shell'
+programmatically.  Resolve a shell buffer from a viewport (or the
+surrounding project) with `agent-shell-shell-buffer'.
+
+Example:
+  (agent-shell-last-activity-time)
+  (agent-shell-last-activity-time
+   :shell-buffer (agent-shell-shell-buffer :no-error t :no-create t))"
+  (with-current-buffer (or shell-buffer (current-buffer))
+    (map-elt agent-shell--state :last-activity-time)))
+
 (defun agent-shell-copy-session-id ()
   "Copy the current session ID to the kill ring."
   (declare (modes agent-shell-mode))
