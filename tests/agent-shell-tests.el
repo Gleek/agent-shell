@@ -3692,6 +3692,25 @@ so the command must not append a second time."
           (should-not (agent-shell--prompt-select-session nil)))
       (kill-buffer other-buffer))))
 
+(ert-deftest agent-shell--prompt-select-session-cancel-kills-buffer-test ()
+  "Cancelling the session picker removes its uninitialized shell buffer."
+  (let ((noninteractive nil)
+        (shell-buffer (generate-new-buffer " *agent-shell-cancel-test*")))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell-buffers)
+                   (lambda () (list shell-buffer)))
+                  ((symbol-function 'agent-shell--emit-event) #'ignore)
+                  ((symbol-function 'completing-read)
+                   (lambda (&rest _) (signal 'quit nil))))
+          (should (eq 'quit
+                      (condition-case nil
+                          (with-current-buffer shell-buffer
+                            (agent-shell--prompt-select-session nil))
+                        (quit 'quit))))
+          (should-not (buffer-live-p shell-buffer)))
+      (when (buffer-live-p shell-buffer)
+        (kill-buffer shell-buffer)))))
+
 (ert-deftest agent-shell--prompt-select-session-single-choice-test ()
   "Test `agent-shell--prompt-select-session' skips the prompt for a lone choice."
   (let ((noninteractive nil)

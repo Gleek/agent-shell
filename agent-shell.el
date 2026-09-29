@@ -7445,20 +7445,26 @@ Falls back to latest session in batch mode (e.g. tests)."
                (selection (if (length= session-choices 1)
                               ;; Only one choice available; follow it without prompting.
                               default-choice
-                            (completing-read
-                             (format "Start shell (default: %s): "
-                                     (if (keywordp (cdar session-choices))
-                                         default-choice
-                                       "Resume session"))
-                             (lambda (string pred action)
-                               (if (eq action 'metadata)
-                                   '(metadata
-                                     (display-sort-function . identity)
-                                     (eager-display . t)
-                                     (eager-update . t))
-                                 (complete-with-action action session-choices string pred)))
-                             nil t nil nil
-                             default-choice))))
+                            (let ((shell-buffer (current-buffer))
+                                  selected)
+                              (unwind-protect
+                                  (setq selected
+                                        (completing-read
+                                         (format "Start shell (default: %s): "
+                                                 (if (keywordp (cdar session-choices))
+                                                     default-choice
+                                                   "Resume session"))
+                                         (lambda (string pred action)
+                                           (if (eq action 'metadata)
+                                               '(metadata
+                                                 (display-sort-function . identity)
+                                                 (eager-display . t)
+                                                 (eager-update . t))
+                                             (complete-with-action action session-choices string pred)))
+                                         nil t nil nil default-choice))
+                                (unless selected
+                                  (let ((inhibit-quit t))
+                                    (kill-buffer shell-buffer))))))))
           (pcase (map-elt session-choices selection)
             (:new-shell nil)
             (:other-shell
