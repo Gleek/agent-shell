@@ -7445,8 +7445,7 @@ Falls back to latest session in batch mode (e.g. tests)."
                (selection (if (length= session-choices 1)
                               ;; Only one choice available; follow it without prompting.
                               default-choice
-                            (let ((shell-buffer (current-buffer))
-                                  selected)
+                            (let (selected)
                               (unwind-protect
                                   (setq selected
                                         (completing-read
@@ -7464,7 +7463,8 @@ Falls back to latest session in batch mode (e.g. tests)."
                                          nil t nil nil default-choice))
                                 (unless selected
                                   (let ((inhibit-quit t))
-                                    (kill-buffer shell-buffer))))))))
+                                    (agent-shell--emit-event
+                                     :event 'session-selection-cancelled))))))))
           (pcase (map-elt session-choices selection)
             (:new-shell nil)
             (:other-shell
@@ -8117,7 +8117,8 @@ message when a request fails or the agent repeats a cursor."
                                 :shell-buffer shell-buffer
                                 :on-session-init on-session-init)))))
                      (quit
-                      (agent-shell--emit-event :event 'session-selection-cancelled)))))
+                      (when (buffer-live-p shell-buffer)
+                        (agent-shell--emit-event :event 'session-selection-cancelled))))))
    :on-failure (lambda (_acp-error _raw-message)
                  (agent-shell--update-bootstrapping-fragment
                   :state (agent-shell--state)

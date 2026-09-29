@@ -3692,14 +3692,16 @@ so the command must not append a second time."
           (should-not (agent-shell--prompt-select-session nil)))
       (kill-buffer other-buffer))))
 
-(ert-deftest agent-shell--prompt-select-session-cancel-kills-buffer-test ()
-  "Cancelling the session picker removes its uninitialized shell buffer."
+(ert-deftest agent-shell--prompt-select-session-cancel-emits-event-test ()
+  "Cancelling the session picker emits its cancellation event."
   (let ((noninteractive nil)
-        (shell-buffer (generate-new-buffer " *agent-shell-cancel-test*")))
+        (shell-buffer (generate-new-buffer " *agent-shell-cancel-test*"))
+        events)
     (unwind-protect
         (cl-letf (((symbol-function 'agent-shell-buffers)
                    (lambda () (list shell-buffer)))
-                  ((symbol-function 'agent-shell--emit-event) #'ignore)
+                  ((symbol-function 'agent-shell--emit-event)
+                   (lambda (&rest args) (push (plist-get args :event) events)))
                   ((symbol-function 'completing-read)
                    (lambda (&rest _) (signal 'quit nil))))
           (should (eq 'quit
@@ -3707,7 +3709,7 @@ so the command must not append a second time."
                           (with-current-buffer shell-buffer
                             (agent-shell--prompt-select-session nil))
                         (quit 'quit))))
-          (should-not (buffer-live-p shell-buffer)))
+          (should (equal events '(session-selection-cancelled session-prompt))))
       (when (buffer-live-p shell-buffer)
         (kill-buffer shell-buffer)))))
 
