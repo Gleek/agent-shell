@@ -8012,5 +8012,72 @@ it in the current window."
                 (should-not (eq (selected-window) origin))))))
       (kill-buffer shell-buffer))))
 
+(ert-deftest agent-shell--busy-indicator-frame-static-string-test ()
+  "A string `agent-shell-busy-indicator-frames' shows as is on every beat."
+  (with-temp-buffer
+    (setq-local agent-shell--state
+                (list (cons :heartbeat (list (cons :status 'busy)
+                                             (cons :value 0)))))
+    (cl-letf (((symbol-function 'agent-shell--state)
+               (lambda () agent-shell--state)))
+      (let ((agent-shell-show-busy-indicator t)
+            (agent-shell-busy-indicator-frames "busy"))
+        (should (equal (agent-shell--busy-indicator-frame) " busy"))
+        (map-put! (map-elt agent-shell--state :heartbeat) :value 7)
+        (should (equal (agent-shell--busy-indicator-frame) " busy"))))))
+
+(ert-deftest agent-shell--make-heartbeat-handler-skips-unchanged-frames-test ()
+  "A busy tick redraws only when its frames change.
+Starting and ending ticks always redraw, and so does the first visible
+tick after an off-screen one."
+  (let ((shell-buffer (generate-new-buffer "*agent-shell-heartbeat-test*"))
+        (frame nil)
+        (visible t)
+        (redraws 0))
+    (unwind-protect
+        (cl-letf (((symbol-function 'agent-shell--busy-indicator-frame)
+                   (lambda () frame))
+                  ((symbol-function 'agent-shell-viewport--buffer)
+                   (lambda (&rest _) nil))
+                  ((symbol-function 'get-buffer-window)
+                   (lambda (&rest _) visible))
+                  ((symbol-function 'agent-shell--update-header-and-mode-line)
+                   (lambda (&rest _) (setq redraws (1+ redraws)))))
+          (let ((handler (agent-shell--make-heartbeat-handler shell-buffer))
+                (agent-shell-chat-mode nil))
+            (funcall handler nil 'started)
+            (should (= redraws 1))
+            (setq frame " busy")
+            (funcall handler nil 'busy)
+            (should (= redraws 2))
+            (funcall handler nil 'busy)
+            (funcall handler nil 'busy)
+            (should (= redraws 2))
+            (setq visible nil)
+            (funcall handler nil 'busy)
+            (should (= redraws 2))
+            (setq visible t)
+            (funcall handler nil 'busy)
+            (should (= redraws 3))
+            (setq frame nil)
+            (funcall handler nil 'ended)
+            (should (= redraws 4))))
+      (kill-buffer shell-buffer))))
+
+;; TODO: Remove after 2026-11-29, along with the check it tests.
+;; Declared special so the test can bind the retired variable.
+(defvar agent-shell-chat-busy-frames)
+
+(ert-deftest agent-shell--start-rejects-retired-chat-busy-frames-test ()
+  "Starting a shell asks to migrate a customized `agent-shell-chat-busy-frames'.
+Its retired default is left alone, as is an unbound variable."
+  (cl-letf (((symbol-function 'agent-shell--make-shell-maker-config)
+             (lambda (&rest _) (throw 'started t))))
+    (let ((agent-shell-chat-busy-frames "busy"))
+      (should-error (agent-shell--start :config nil) :type 'user-error))
+    (let ((agent-shell-chat-busy-frames ["|" "/" "-" "\\"]))
+      (should (catch 'started (agent-shell--start :config nil))))
+    (should (catch 'started (agent-shell--start :config nil)))))
+
 (provide 'agent-shell-tests)
 ;;; agent-shell-tests.el ends here

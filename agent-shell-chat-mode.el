@@ -70,11 +70,16 @@ overridden the next time a shell starts."
   :type 'boolean
   :group 'agent-shell)
 
-(defvar agent-shell-chat-busy-frames
+(defvar agent-shell-prompt-busy-frames
   ["|" "/" "-" "\\"]
   "Frames animating the live prompt's marker while the agent works.
-A vector or list of strings, each a single column, drawn in the body
-indent ahead of the marker.  For example, [\"·\" \"•\" \"●\" \"•\"].
+A vector or list of strings, drawn in the body indent ahead of the
+marker, or a string shown as is, without animating.  For example,
+[\"·\" \"•\" \"●\" \"•\"] or \"busy\".
+
+The body indent fits a single column, so a wider frame (like \"busy\")
+is followed by a plain space, pushing the marker right while the agent
+works.
 
 ASCII by default, so the buffer's own font draws them.  Anything a font
 may lack comes from a fallback font instead, which can draw it wider
@@ -140,12 +145,16 @@ returns \" Me \" in that face."
 (defun agent-shell-chat--busy-frame ()
   "Return the busy frame for the heartbeat's current beat, or nil when idle.
 
-For example, on the heartbeat's third beat returns \"-\"."
+For example, on the heartbeat's third beat returns \"-\".  With
+`agent-shell-prompt-busy-frames' set to a string, returns that string
+on every beat."
   (when-let* (((bound-and-true-p agent-shell-show-busy-indicator))
               (heartbeat (map-elt agent-shell--state :heartbeat))
               ((eq (map-elt heartbeat :status) 'busy)))
-    (seq-elt agent-shell-chat-busy-frames
-             (mod (map-elt heartbeat :value) (seq-length agent-shell-chat-busy-frames)))))
+    (if (stringp agent-shell-prompt-busy-frames)
+        agent-shell-prompt-busy-frames
+      (seq-elt agent-shell-prompt-busy-frames
+               (mod (map-elt heartbeat :value) (seq-length agent-shell-prompt-busy-frames))))))
 
 (defun agent-shell-chat--live-marker ()
   "Return the live prompt's marker, animated while the agent works.
@@ -156,13 +165,17 @@ frame faced `agent-shell-secondary' so it recedes behind the marker.
 A frame's glyph can come from a fallback font wider than a column, so
 the space after it aligns the marker to the body indent rather than
 trusting the frame's width.  Aligned in units of the buffer's own font,
-which unlike bare columns follow `text-scale-adjust'."
+which unlike bare columns follow `text-scale-adjust'.  A frame wider
+than a column (like \"busy\") can't fit the indent, so a plain space
+follows it instead."
   (if-let* ((frame (agent-shell-chat--busy-frame)))
       (concat (propertize frame 'face 'agent-shell-secondary)
-              (propertize (concat (propertize " " 'display
-                                              `(space :align-to
-                                                      (,(string-width agent-shell-chat--body-indent)
-                                                       . width)))
+              (propertize (concat (if (> (string-width frame) 1)
+                                      " "
+                                    (propertize " " 'display
+                                                `(space :align-to
+                                                        (,(string-width agent-shell-chat--body-indent)
+                                                         . width))))
                                   agent-shell-chat--prompt)
                           'face 'default))
     (propertize (concat agent-shell-chat--body-indent agent-shell-chat--prompt)

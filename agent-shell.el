@@ -585,14 +585,15 @@ Only appears when a session is active."
 
 (defcustom agent-shell-busy-indicator-frames 'wide
   "Frames for the busy indicator animation.
-Can be a symbol selecting a predefined style, or a list of frame strings.
-When providing custom frames, do not include leading spaces as padding
-is added automatically."
+Can be a symbol selecting a predefined style, a list of frame strings,
+or a string shown as is, without animating.  When providing custom
+frames, do not include leading spaces as padding is added automatically."
   :type '(choice (const :tag "Circle (blinks)" circle)
                  (const :tag "Wave (pulses up and down)" wave)
                  (const :tag "Dots Block (circular spin)" dots-block)
                  (const :tag "Dots Round (circular spin)" dots-round)
                  (const :tag "Wide (horizontal blocks)" wide)
+                 (string :tag "Static text")
                  (repeat :tag "Custom frames" string))
   :group 'agent-shell)
 
@@ -4755,6 +4756,16 @@ Please use 'agent-shell-transcript-file-path-function and unbind old
 variable (see makunbound)"))
   (when agent-shell-session-restore-strategy
     (user-error "Please migrate agent-shell-session-restore-strategy to agent-shell-session-restore-verbosity"))
+  ;; TODO: Remove after 2026-11-29.
+  ;; Retired default was ["|" "/" "-" "\\"], so only a customized value
+  ;; needs migrating.
+  (when (and (boundp 'agent-shell-chat-busy-frames)
+             (not (equal (symbol-value 'agent-shell-chat-busy-frames)
+                         ["|" "/" "-" "\\"])))
+    (user-error "'agent-shell-chat-busy-frames is retired.
+
+Please use 'agent-shell-prompt-busy-frames and unbind old
+variable (see makunbound)"))
   (agent-shell--validate-session-strategy
    (or session-strategy agent-shell-session-strategy))
   (let* ((shell-maker-config (agent-shell--make-shell-maker-config
@@ -4805,27 +4816,7 @@ variable (see makunbound)"))
                                       :buffer shell-buffer
                                       :heartbeat (agent-shell-heartbeat-make
                                                   :on-heartbeat
-                                                  (lambda (_heartbeat status)
-                                                    ;; 'ended is the final tick; render
-                                                    ;; even if off-screen ensures hidden.
-                                                    (when (or (eq status 'ended)
-                                                              (get-buffer-window shell-buffer t))
-                                                      (with-current-buffer shell-buffer
-                                                        (agent-shell--update-header-and-mode-line
-                                                         :cache-enabled (eq status 'busy))
-                                                        (when agent-shell-chat-mode
-                                                          (agent-shell-chat--animate-live-marker))))
-                                                    ;; 'ended is the final tick; render even
-                                                    ;; if off-screen to ensure animation is hidden.
-                                                    (when-let* ((viewport-buffer (agent-shell-viewport--buffer
-                                                                                  :shell-buffer shell-buffer
-                                                                                  :existing-only t))
-                                                                ;; 'ended is the final tick; render even
-                                                                ;; if off-screen to ensure animation is hidden.
-                                                                ((or (eq status 'ended)
-                                                                     (get-buffer-window viewport-buffer t))))
-                                                      (with-current-buffer viewport-buffer
-                                                        (agent-shell-viewport--update-header)))))
+                                                  (agent-shell--make-heartbeat-handler shell-buffer))
                                       :client-maker (map-elt config :client-maker)
                                       :needs-authentication (map-elt config :needs-authentication)
                                       :authenticate-request-maker (map-elt config :authenticate-request-maker)
@@ -10446,10 +10437,56 @@ Prefers config option data when available."
                         ('dots-block '("⣷" "⣯" "⣟" "⡿" "⢿" "⣻" "⣽" "⣾"))
                         ('dots-round '("⢎⡰" "⢎⡡" "⢎⡑" "⢎⠱" "⠎⡱" "⢊⡱" "⢌⡱" "⢆⡱"))
                         ('wide '("░   " "░░  " "░░░ " "░░░░" "░░░ " "░░  " "░   " "    "))
+                        ((pred stringp) (list agent-shell-busy-indicator-frames))
                         ((pred listp) agent-shell-busy-indicator-frames)
                         (_ '("▁" "▂" "▃" "▄" "▅" "▆" "▇" "█" "▇" "▆" "▅" "▄" "▃" "▂"))))
               (value (map-nested-elt (agent-shell--state) '(:heartbeat :value))))
     (concat " " (seq-elt frames (mod value (length frames))))))
+
+(defun agent-shell--make-heartbeat-handler (shell-buffer)
+  "Return a heartbeat handler drawing SHELL-BUFFER's busy indicators.
+
+The handler redraws the shell's header, mode line and live prompt
+marker, and its viewport's header, whichever are visible.  A busy tick
+whose frames match those it last drew redraws nothing, so a static
+indicator (see `agent-shell-busy-indicator-frames' and
+`agent-shell-prompt-busy-frames') costs no redisplay while busy.
+
+For example, with both set to \"busy\", a turn redraws on its starting
+tick, its first busy tick and its ending tick, and on none in between."
+  (let ((shell-frames nil)
+        (viewport-frames nil))
+    (lambda (_heartbeat status)
+      (when-let* (((buffer-live-p shell-buffer))
+                  (frames (with-current-buffer shell-buffer
+                            (cons (agent-shell--busy-indicator-frame)
+                                  (and agent-shell-chat-mode
+                                       (agent-shell-chat--busy-frame))))))
+        ;; 'ended is the final tick; render even if off-screen to
+        ;; ensure animation is hidden.  Frames go unrecorded while
+        ;; off-screen, so the next visible tick redraws.
+        (if (or (eq status 'ended)
+                (get-buffer-window shell-buffer t))
+            (unless (and (eq status 'busy)
+                         (equal frames shell-frames))
+              (setq shell-frames frames)
+              (with-current-buffer shell-buffer
+                (agent-shell--update-header-and-mode-line
+                 :cache-enabled (eq status 'busy))
+                (when agent-shell-chat-mode
+                  (agent-shell-chat--animate-live-marker))))
+          (setq shell-frames nil))
+        (when-let* ((viewport-buffer (agent-shell-viewport--buffer
+                                      :shell-buffer shell-buffer
+                                      :existing-only t)))
+          (if (or (eq status 'ended)
+                  (get-buffer-window viewport-buffer t))
+              (unless (and (eq status 'busy)
+                           (equal frames viewport-frames))
+                (setq viewport-frames frames)
+                (with-current-buffer viewport-buffer
+                  (agent-shell-viewport--update-header)))
+            (setq viewport-frames nil)))))))
 
 (defun agent-shell--mode-line-model-menu ()
   "Build a menu keymap for selecting a model from the mode line.
