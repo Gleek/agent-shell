@@ -1490,6 +1490,105 @@ straight to the shell."
                  (list (cons :config-options options))
                  "model"))))
 
+(ert-deftest agent-shell--normalize-config-options-grouped-test ()
+  "Test `agent-shell--normalize-config-options' flattens option groups."
+  (let ((options (agent-shell--normalize-config-options
+                  [((id . "model")
+                    (name . "Model")
+                    (category . "model")
+                    (type . "select")
+                    (currentValue . "model-1")
+                    (options . [((group . "recommended")
+                                 (name . "Recommended")
+                                 (options . [((value . "model-1")
+                                              (name . "Model 1")
+                                              (description . "Fast"))
+                                             ((value . "model-2")
+                                              (name . "Model 2"))]))
+                                ((group . "other")
+                                 (name . "Other")
+                                 (options . [((value . "model-3")
+                                              (name . "Model 3"))]))]))])))
+    (should (equal (map-elt (car options) :options)
+                   '(((:value . "model-1")
+                      (:name . "Model 1")
+                      (:description . "Fast")
+                      (:group . "Recommended"))
+                     ((:value . "model-2")
+                      (:name . "Model 2")
+                      (:description . nil)
+                      (:group . "Recommended"))
+                     ((:value . "model-3")
+                      (:name . "Model 3")
+                      (:description . nil)
+                      (:group . "Other")))))))
+
+(ert-deftest agent-shell--config-option-value-choices-test ()
+  "Test `agent-shell--config-option-value-choices'."
+  ;; Ungrouped and uniquely named values keep their bare names.
+  (should (equal (mapcar #'car (agent-shell--config-option-value-choices
+                                '((:options . (((:value . "ask") (:name . "Ask"))
+                                               ((:value . "code") (:name . "Code")))))))
+                 '("Ask" "Code")))
+  (should (equal (mapcar #'car (agent-shell--config-option-value-choices
+                                '((:options . (((:value . "model-1")
+                                                (:name . "Model 1")
+                                                (:group . "Recommended")))))))
+                 '("Model 1")))
+  ;; Same-named values in different groups are qualified by group.
+  (let ((choices (agent-shell--config-option-value-choices
+                  '((:options . (((:value . "anthropic/sonnet")
+                                  (:name . "Claude Sonnet")
+                                  (:group . "Anthropic"))
+                                 ((:value . "openrouter/sonnet")
+                                  (:name . "Claude Sonnet")
+                                  (:group . "OpenRouter"))
+                                 ((:value . "opus")
+                                  (:name . "Opus")
+                                  (:group . "Anthropic"))))))))
+    (should (equal (mapcar #'car choices)
+                   '("Claude Sonnet (Anthropic)"
+                     "Claude Sonnet (OpenRouter)"
+                     "Opus")))
+    (should (equal (map-elt (map-elt choices "Claude Sonnet (OpenRouter)") :value)
+                   "openrouter/sonnet"))))
+
+(ert-deftest agent-shell-set-session-config-option-grouped-duplicates-test ()
+  "Test `agent-shell-set-session-config-option' selects same-named grouped values."
+  (let* ((options (agent-shell--normalize-config-options
+                   [((id . "model")
+                     (name . "Model")
+                     (type . "select")
+                     (currentValue . "anthropic/sonnet")
+                     (options . [((group . "anthropic")
+                                  (name . "Anthropic")
+                                  (options . [((value . "anthropic/sonnet")
+                                               (name . "Claude Sonnet"))]))
+                                 ((group . "openrouter")
+                                  (name . "OpenRouter")
+                                  (options . [((value . "openrouter/sonnet")
+                                               (name . "Claude Sonnet"))]))]))]))
+         (state (list (cons :session (list (cons :id "session-1")
+                                           (cons :config-options options)))))
+         (value-default nil)
+         (sent-value nil))
+    (with-temp-buffer
+      (setq major-mode 'agent-shell-mode)
+      (cl-letf (((symbol-function 'agent-shell--state)
+                 (lambda () state))
+                ((symbol-function 'completing-read)
+                 (lambda (prompt _collection &optional _pred _require _initial _hist default &rest _)
+                   (if (string-prefix-p "Set session option" prompt)
+                       "Model"
+                     (setq value-default default)
+                     "Claude Sonnet (OpenRouter)")))
+                ((symbol-function 'agent-shell--set-session-config-option)
+                 (lambda (&rest args)
+                   (setq sent-value (plist-get args :value)))))
+        (agent-shell-set-session-config-option)))
+    (should (equal value-default "Claude Sonnet (Anthropic)"))
+    (should (equal sent-value "openrouter/sonnet"))))
+
 (ert-deftest agent-shell--format-available-config-options-test ()
   "Test `agent-shell--format-available-config-options' enumerates values."
   (let ((rendered (agent-shell--format-available-config-options

@@ -10840,14 +10840,13 @@ with ON-SUCCESS function."
                                                 config-choices))))
     (unless selected-config-option
       (user-error "Unknown session config option: %s" config-selection))
-    (let* ((value-choices (mapcar (lambda (value)
-                                    (cons (map-elt value :name)
-                                          value))
-                                  (map-elt selected-config-option :options)))
+    (let* ((value-choices (agent-shell--config-option-value-choices
+                           selected-config-option))
            (current-value (map-elt selected-config-option :current-value))
-           (default-value-name (agent-shell--config-option-value-name
-                                selected-config-option
-                                current-value))
+           (default-value-name (car (seq-find (lambda (choice)
+                                                (equal (map-elt (cdr choice) :value)
+                                                       current-value))
+                                              value-choices)))
            (value-selection
             (completing-read
              "Set value: "
