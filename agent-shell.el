@@ -2871,12 +2871,27 @@ capitalize as needed.
             (if (= count 1) "a" (number-to-string count))
             (map-elt phrase (if (= count 1) :singular :plural)))))
 
+(defun agent-shell--tool-call-file-paths (tool-call)
+  "Return file paths reported by TOOL-CALL, or nil if unavailable.
+For example, two diffs for \"a.el\" return (\"a.el\" \"a.el\")."
+  (or (seq-keep (lambda (diff) (map-elt diff :file))
+                (map-elt tool-call :diffs))
+      (seq-keep (lambda (location) (map-elt location 'path))
+                (map-elt tool-call :locations))
+      (when-let* ((path (seq-find #'stringp
+                                 (seq-map (lambda (key)
+                                            (map-nested-elt tool-call (list :raw-input key)))
+                                          '(filepath fileName path file_path)))))
+        (list path))))
+
 (cl-defun agent-shell--activity-group-descriptive-text (&key members thought)
   "Return a Claude Code style summary phrase for MEMBERS.
 
 MEMBERS is a list of (ID . TOOL-CALL) pairs in call order.  Kinds are
 collapsed into counted phrases joined by commas, e.g. \"Ran 3 commands,
 read a file\", in first-seen order.  Only the first word is capitalized.
+Reads, edits, and deletes count distinct reported file paths; when any
+call of that kind lacks paths, they count operations instead.
 A kind reads in the present tense (\"Run a command\") while any of its
 members is still pending or in progress, past tense once all have
 finished.
@@ -2894,16 +2909,34 @@ Thoughts are not counted."
          (tool-phrases
           (seq-map
            (lambda (kind)
-             (let ((of-kind (seq-filter (lambda (member)
+             (let* ((of-kind (seq-filter (lambda (member)
                                           (equal (funcall member-kind member) kind))
-                                        tool-members)))
-               (agent-shell--tool-call-kind-phrase
-                :kind kind
-                :count (length of-kind)
-                :pending (seq-some (lambda (member)
-                                     (member (map-elt (cdr member) :status)
-                                             '("pending" "in_progress")))
-                                   of-kind))))
+                                        tool-members))
+                    (count (length of-kind))
+                    (pending (seq-some (lambda (member)
+                                         (member (map-elt (cdr member) :status)
+                                                 '("pending" "in_progress")))
+                                       of-kind))
+                    (paths (when (member kind '("read" "edit" "delete"))
+                             (seq-map (lambda (member)
+                                        (agent-shell--tool-call-file-paths (cdr member)))
+                                      of-kind))))
+               (if (memq nil paths)
+                   (let ((operation (assoc-default kind
+                                                   '(("read" . "read")
+                                                     ("edit" . "edit")
+                                                     ("delete" . "deletion")))))
+                     (format "%s %s %s%s" (if pending "make" "made")
+                             (if (= count 1)
+                                 (if (equal kind "edit") "an" "a")
+                               count)
+                             operation (if (= count 1) "" "s")))
+                 (agent-shell--tool-call-kind-phrase
+                  :kind kind
+                  :count (if paths
+                             (length (seq-uniq (apply #'append paths)))
+                           count)
+                  :pending pending))))
            (seq-uniq (seq-map member-kind tool-members))))
          (summary (string-join (if thought (cons "thought" tool-phrases) tool-phrases)
                                ", ")))
