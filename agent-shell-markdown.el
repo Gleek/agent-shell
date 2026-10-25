@@ -1050,22 +1050,7 @@ otherwise group 3 (bare form)."
   (let ((group (if (match-beginning 2) 2 3)))
     (buffer-substring-no-properties (match-beginning group) (match-end group))))
 
-(defun agent-shell-markdown--link-verb (url verb)
-  "Return VERB, or the action opening URL described when VERB is nil.
-
-Describes where invoking lands: \"open file\" for a local file (which
-opens in Emacs) and \"open in browser\" otherwise.  Resolved on each
-call rather than at render time, so a file appearing or going away
-later doesn't leave the wording stale.
-
-For example, URL \"/tmp/notes.org\" returns \"open file\" while it
-exists, and \"open in browser\" once it doesn't."
-  (or verb
-      (if (agent-shell-markdown--parse-local-link url)
-          "open file"
-        "open in browser")))
-
-(cl-defun agent-shell-markdown--apply-link-properties (&key start end url verb tracking-file)
+(cl-defun agent-shell-markdown--apply-link-properties (&key start end url tracking-file)
   "Make [START, END) a rendered link to URL.
 
 Applies what every link the renderer produces carries: face
@@ -1078,18 +1063,15 @@ navigation stops on, so a link missing it would open on RET yet stay
 invisible to both.  Web URLs also carry `browse-url-data', so
 terminal Emacs can display them as OSC 8 hyperlinks when enabled.
 
-VERB names the action in both hints (see
-`agent-shell-markdown--link-verb' for the default and when it
-resolves).  Both hints follow it with URL in full, so the target can
-be inspected before opening it.
+Both hints name URL in full, so the target can be inspected before
+opening it.
 
 TRACKING-FILE, when non-nil, records opening the link there (see
 `agent-shell-markdown--track-link-open').
 
 For example, over the `docs' of a rendered \"[docs](https://gnu.org)\",
-RET opens the URL, the echo area reads \"Press RET to open in
-browser: https://gnu.org\", and hovering shows \"Open in browser:
-https://gnu.org\"."
+RET opens the URL, the echo area reads \"Press RET to open:
+https://gnu.org\", and hovering shows \"Open: https://gnu.org\"."
   (let* ((open-action (lambda () (interactive)
                         (when tracking-file
                           (agent-shell-markdown--track-link-open
@@ -1104,15 +1086,9 @@ https://gnu.org\"."
        (agent-shell-markdown--action-hint
         :action open-action
         :keymap link-map
-        :verb (format "%s: %s" (agent-shell-markdown--link-verb url verb) url))))
-    ;; The mouse gets the same wording without a key in it, resolved on
-    ;; hover like the echoed hint is.
-    (put-text-property start end 'help-echo
-                       (lambda (_window _object _pos)
-                         (let ((text (agent-shell-markdown--link-verb url verb)))
-                           (concat (upcase (substring text 0 1))
-                                   (substring text 1)
-                                   ": " url))))
+        :verb (concat "open: " url))))
+    ;; The mouse gets the same wording without a key in it.
+    (put-text-property start end 'help-echo (concat "Open: " url))
     ;; A hand pointer when over is enough. No need for `mouse-face'.
     (put-text-property start end 'pointer 'hand)
     (put-text-property start end 'agent-shell-markdown-url url)
@@ -1519,11 +1495,10 @@ For example, the buffer \"see ![logo](logo.png)\" becomes
                 (goto-char markup-start)
                 (insert label)
                 (let ((end (+ markup-start (length label))))
-                  ;; A link standing in for the image, so the hint says so
-                  ;; and there's no resizing to offer.
+                  ;; A link standing in for the image, so there's no
+                  ;; resizing to offer.
                   (agent-shell-markdown--apply-link-properties
-                   :start markup-start :end end :url url
-                   :verb "open image in browser")
+                   :start markup-start :end end :url url)
                   (when source
                     (put-text-property markup-start end
                                        'agent-shell-markdown-source source)))))))))))))

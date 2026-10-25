@@ -444,8 +444,8 @@ streaming **not bold**" nil)))))
 `get-pos-property' reports what text inserted at a position would
 inherit rather than what sits there.  Unless the span is
 rear-nonsticky the hint still answers one position past its end, so a
-link's \"Press RET to open in browser: ...\" shows while point sits on
-the space after the link."
+link's \"Press RET to open: ...\" shows while point sits on the space
+after the link."
   (with-temp-buffer
     (insert "see [wool.com](https://wool.com/x) ok\n\n"
             "| A | L |\n|---|---|\n| x | [j.com](https://j.com/y) |\n\n"
@@ -679,8 +679,7 @@ it is still picked up by the bare-URL linkifier."
       (delete-file image-file))))
 
 (ert-deftest agent-shell-markdown-remote-image-link-hints-open-key ()
-  ;; A remote image that falls back to a link hints at the browser rather
-  ;; than at opening a file, since that's what invoking it does.
+  ;; A remote image that falls back to a link hints like any other link.
   (let ((rendered (agent-shell-markdown-convert
                    "![docs](https://example.com/a.png)"))
         (echoed nil))
@@ -689,63 +688,46 @@ it is still picked up by the bare-URL linkifier."
                  (setq echoed (apply #'format format-string args)))))
       (funcall (seq-first (get-text-property 0 'cursor-sensor-functions rendered))
                nil nil 'entered)
-      (should (equal "Press RET to open image in browser: https://example.com/a.png"
+      (should (equal "Press RET to open: https://example.com/a.png"
                      echoed)))))
 
-(ert-deftest agent-shell-markdown-link-hints-where-it-lands ()
-  ;; A link looks actionable (link face), but not where invoking it goes: `agent-shell-markdown--open-link' visits local
-  ;; files in Emacs and sends everything else to the browser.  The hint
-  ;; names that, and is computed on entry so a file appearing or going
-  ;; away later doesn't leave it lying.
-  (let ((linked-file (make-temp-file "agent-shell-test" nil ".el"))
-        (echoed nil))
-    (unwind-protect
-        (cl-letf (((symbol-function 'message)
-                   (lambda (format-string &rest args)
-                     (setq echoed (apply #'format format-string args)))))
-          (let ((rendered (agent-shell-markdown-convert
-                           (format "[code](%s)" linked-file))))
-            (funcall (seq-first (get-text-property
-                                 0 'cursor-sensor-functions rendered))
-                     nil nil 'entered)
-            (should (equal (format "Press RET to open file: %s" linked-file)
-                           echoed)))
-          (let ((rendered (agent-shell-markdown-convert
-                           "[docs](https://example.com)")))
-            (funcall (seq-first (get-text-property
-                                 0 'cursor-sensor-functions rendered))
-                     nil nil 'entered)
-            (should (equal "Press RET to open in browser: https://example.com"
-                           echoed))))
-      (delete-file linked-file))))
+(ert-deftest agent-shell-markdown-link-hints-its-target ()
+  ;; A link's text needn't match where it goes, so the hint names the
+  ;; target in full, letting it be inspected before opening.
+  (let ((echoed nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (format-string &rest args)
+                 (setq echoed (apply #'format format-string args)))))
+      (let ((rendered (agent-shell-markdown-convert
+                       "[code](/tmp/notes.org#L10)")))
+        (funcall (seq-first (get-text-property
+                             0 'cursor-sensor-functions rendered))
+                 nil nil 'entered)
+        (should (equal "Press RET to open: /tmp/notes.org#L10" echoed)))
+      (let ((rendered (agent-shell-markdown-convert
+                       "[docs](https://example.com)")))
+        (funcall (seq-first (get-text-property
+                             0 'cursor-sensor-functions rendered))
+                 nil nil 'entered)
+        (should (equal "Press RET to open: https://example.com" echoed))))))
 
-(ert-deftest agent-shell-markdown-link-help-echo-says-where-it-lands ()
+(ert-deftest agent-shell-markdown-link-help-echo-names-its-target ()
   ;; The mouse gets the same wording the echo area does, minus the key
   ;; (a tooltip naming one is no use to whoever is holding a mouse).
-  ;; `help-echo' is a function, so it resolves on hover like the hint.
-  (let ((linked-file (make-temp-file "agent-shell-test" nil ".el")))
-    (unwind-protect
-        (progn
-          (should (equal (format "Open file: %s" linked-file)
-                         (funcall (get-text-property
-                                   0 'help-echo
-                                   (agent-shell-markdown-convert
-                                    (format "[code](%s)" linked-file)))
-                                  nil nil 0)))
-          (should (equal "Open in browser: https://example.com"
-                         (funcall (get-text-property
-                                   0 'help-echo
-                                   (agent-shell-markdown-convert
-                                    "[docs](https://example.com)"))
-                                  nil nil 0)))
-          ;; A remote image falling back to a link keeps its own wording.
-          (should (equal "Open image in browser: https://example.com/a.png"
-                         (funcall (get-text-property
-                                   0 'help-echo
-                                   (agent-shell-markdown-convert
-                                    "![docs](https://example.com/a.png)"))
-                                  nil nil 0))))
-      (delete-file linked-file))))
+  (should (equal "Open: /tmp/notes.org#L10"
+                 (get-text-property
+                  0 'help-echo
+                  (agent-shell-markdown-convert "[code](/tmp/notes.org#L10)"))))
+  (should (equal "Open: https://example.com"
+                 (get-text-property
+                  0 'help-echo
+                  (agent-shell-markdown-convert "[docs](https://example.com)"))))
+  ;; So does a remote image falling back to a link.
+  (should (equal "Open: https://example.com/a.png"
+                 (get-text-property
+                  0 'help-echo
+                  (agent-shell-markdown-convert
+                   "![docs](https://example.com/a.png)")))))
 
 (ert-deftest agent-shell-markdown-image-help-echo-names-the-action ()
   ;; Images say the same to the mouse, leaving resizing out since it has
@@ -2826,8 +2808,7 @@ after" nil)))))
         (funcall (seq-first (get-text-property
                              link-start 'cursor-sensor-functions rendered))
                  nil nil 'entered)
-        (should (equal "Press RET to open in browser: https://example.com"
-                       echoed))))))
+        (should (equal "Press RET to open: https://example.com" echoed))))))
 
 (ert-deftest agent-shell-markdown-convert-table-skips-frozen-cell-pipe ()
   ;; `| `a|b` | c |' — inline-code body contains a `|', which our
