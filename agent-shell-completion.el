@@ -50,9 +50,19 @@ slow in large projects."
 (defcustom agent-shell-command-completion-enabled t
   "Non-nil pops agent command completion as / is typed.
 
-/ only pops at the start of the input, where agents recognize commands.
+See `agent-shell-command-completion-position' for where / pops.
 / completion is available via \\[completion-at-point] either way."
   :type 'boolean
+  :group 'agent-shell)
+
+(defcustom agent-shell-command-completion-position 'start
+  "Where typing / pops agent command completion.
+
+`start' only pops at the start of the input, where agents recognize
+commands.  `anywhere' also pops mid-prompt after whitespace, which
+helps reference skills inside a message."
+  :type '(choice (const :tag "Start of input" start)
+                 (const :tag "Anywhere after whitespace" anywhere))
   :group 'agent-shell)
 
 (defun agent-shell--completion-bounds (char-class trigger-char)
@@ -178,7 +188,8 @@ buffer.  Returns nil if the override is set but its buffer is dead."
   "Complete available commands after /."
   (when-let* ((bounds (agent-shell--completion-bounds "[:alnum:]_-" ?/))
               ;; Bounds start after /, so the / itself sits one char back.
-              ((agent-shell-completion--command-start-p (1- (map-elt bounds :start))))
+              ((or (eq agent-shell-command-completion-position 'anywhere)
+                   (agent-shell-completion--command-start-p (1- (map-elt bounds :start)))))
               (source (or (and (buffer-live-p agent-shell-completion--shell-buffer)
                                agent-shell-completion--shell-buffer)
                           (agent-shell--shell-buffer :no-error t :no-create t)))
@@ -205,9 +216,8 @@ buffer.  Returns nil if the override is set but its buffer is dead."
 Each pops only when `agent-shell-file-completion-enabled' or
 `agent-shell-command-completion-enabled' respectively allows it.
 Only triggers when the character is at line start or after whitespace,
-preventing spurious completions mid-word or in paths.  / additionally
-requires being at the start of the input, where agents recognize
-commands."
+preventing spurious completions mid-word or in paths.  Where / completes
+depends on `agent-shell-command-completion-position'."
   (when (and (memq (char-before) '(?@ ?/))
              (or (= (point) (1+ (line-beginning-position)))
                  (memq (char-before (1- (point))) '(?\s ?\t ?\n))))

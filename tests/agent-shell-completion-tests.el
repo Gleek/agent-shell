@@ -110,6 +110,31 @@ multi-line prompt, makes it plain text."
             (should-not (agent-shell--command-completion-at-point))))
       (kill-buffer shell))))
 
+(ert-deftest agent-shell-completion-command-position-test ()
+  "The position option controls both manual completion and automatic popping."
+  (let ((shell (agent-shell-completion-tests--make-shell))
+        (agent-shell-command-completion-enabled t))
+    (unwind-protect
+        (dolist (position '(start anywhere))
+          (let ((agent-shell-command-completion-position position))
+            (dolist (input '("/" "hello /" "hello\n/" "hello\t/" " /"
+                             "hello/" "src/" "https://"))
+              (with-temp-buffer
+                (setq-local agent-shell-completion--shell-buffer shell)
+                (insert input)
+                (let ((expected (or (equal input "/")
+                                    (and (eq position 'anywhere)
+                                         (member input '("hello /" "hello\n/"
+                                                         "hello\t/" " /")))))
+                      (popped nil))
+                  (should (equal (nth 2 (agent-shell--command-completion-at-point))
+                                 (and expected '("help" "compact"))))
+                  (cl-letf (((symbol-function 'completion-at-point)
+                             (lambda () (setq popped t))))
+                    (agent-shell--trigger-completion-at-point))
+                  (should (eq popped (and expected t))))))))
+      (kill-buffer shell))))
+
 (ert-deftest agent-shell-completion-command-after-shell-prompt-test ()
   "Text above the prompt is not input, so / after the prompt still completes."
   (let ((shell (agent-shell-completion-tests--make-shell)))
