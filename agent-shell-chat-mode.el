@@ -788,11 +788,13 @@ above, putting the first line of a multi-line input out of reach of
                                    (t agent-shell-chat--body-indent)))
                ;; The label, closed by the newline it rides rather than by the
                ;; second half of `pad'.
-               (before (cond ((not labeled) "")
-                             (label-nl (concat lead me-label
-                                               (propertize "\n" 'face
-                                                           'default)))
-                             (t (concat lead me-label pad))))
+               (before (apply #'concat
+                              (agent-shell-chat--label-rows
+                               (cond ((not labeled) "")
+                                     (label-nl (concat lead me-label
+                                                       (propertize "\n" 'face
+                                                                   'default)))
+                                     (t (concat lead me-label pad))))))
                ;; One row per covered prompt position, where the prompt is
                ;; long enough to hold them; the overlay covering the prompt
                ;; then starts past the rows rather than under them.
@@ -1069,7 +1071,7 @@ newline would merge the input line into the response for line motion
                (agent-shell-chat--ensure-overlay
                 :tag 'agent :beg body-start :end end
                 :anchor-beg (if split body-start mbeg) :anchor-end end
-                :props (list (cons 'before-string (if split "" before))
+                :props (list (cons 'before-string (if split "" (apply #'concat rows)))
                              (cons 'display "")
                              ;; The response's first line starts a row inside
                              ;; this overlay, where the label's last row ended,

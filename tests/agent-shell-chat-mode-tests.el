@@ -311,6 +311,22 @@ without an `agent-shell-chat--tag' are left alone."
       (should (string-match-p
                "Claude" (agent-shell-chat-mode-tests--agent-label-string (car agent)))))))
 
+(ert-deftest agent-shell-chat-short-labels-preserve-line-height-test ()
+  "Labels drawn whole retain their height on the terminating newline."
+  (agent-shell-chat-mode-tests--with-shell
+    (agent-shell-chat-mode-tests--prompt ">")
+    (insert "hello")
+    (agent-shell-chat-mode-tests--marker)
+    (insert "\nreply")
+    (agent-shell-chat--relabel)
+    (let ((count 0))
+      (dolist (overlay (overlays-in (point-min) (point-max)))
+        (let ((text (overlay-get overlay 'before-string)))
+          (when (and (stringp text) (string-match "\\(?:Me\\|Claude\\) *\n" text))
+            (setq count (1+ count))
+            (should (= 1.15 (get-text-property (1- (match-end 0)) 'line-height text))))))
+      (should (= 2 count)))))
+
 (ert-deftest agent-shell-chat-live-prompt-hidden-with-bar-test ()
   "The empty live prompt shows `Me', or is hidden when the bar is on."
   (agent-shell-chat-mode-tests--with-shell
