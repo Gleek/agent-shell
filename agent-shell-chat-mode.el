@@ -138,17 +138,17 @@ drop the input flush to column 0.")
 ;;; Faces
 
 (defface agent-shell-chat-me-label
-  '((t :inherit (bold font-lock-keyword-face) :inverse-video t :box t))
+  '((t :inherit (bold font-lock-keyword-face) :inverse-video t))
   "Face for the user (\"Me\") chat label.
 `:inverse-video' fills the badge with the foreground color (text inverts
-to the background); `:box' t adds a border in the foreground color."
+to the background)."
   :group 'agent-shell)
 
 (defface agent-shell-chat-agent-label
-  '((t :inherit (bold font-lock-function-name-face) :inverse-video t :box t))
+  '((t :inherit (bold font-lock-function-name-face) :inverse-video t))
   "Face for the agent chat label.
 `:inverse-video' fills the badge with the foreground color (text inverts
-to the background); `:box' t adds a border in the foreground color."
+to the background)."
   :group 'agent-shell)
 
 ;;; State
@@ -184,11 +184,12 @@ For example, (agent-shell-chat--label \"Me\" \\='user) returns \" Me \" in
 
 The default `agent-shell-chat-label-function'.  The face is picked by
 LABEL's :role (see `agent-shell-chat-me-label' and
-`agent-shell-chat-agent-label'), and carries the box.
+`agent-shell-chat-agent-label'), with extra height above the unboxed text.
 
 For example, over \\='((:text . \"Me\") (:role . user)) returns \" Me \"
 in `agent-shell-chat-me-label'."
   (propertize (format " %s " (map-elt label :text))
+              'line-height 1.15
               'face (if (eq (map-elt label :role) 'user)
                         'agent-shell-chat-me-label
                       'agent-shell-chat-agent-label)))
@@ -619,7 +620,10 @@ reused one keeps whatever the version before wrote (see
 For example, over \"\\n Me \\n\" returns (\"\\n\" \" Me \\n\"), and over a
 label with no newline returns it unchanged as a single row."
   (let ((pieces (split-string label "\n")))
-    (append (mapcar (lambda (piece) (concat piece "\n")) (butlast pieces))
+    (append (mapcar (lambda (piece)
+                      (concat piece (propertize "\n" 'line-height
+                                                (get-text-property 0 'line-height piece))))
+                    (butlast pieces))
             (let ((tail (car (last pieces))))
               (unless (string-empty-p tail)
                 (list tail))))))
